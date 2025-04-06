@@ -6,4 +6,6 @@
 README.md => りーどみー!!!!!  
 index.html => 下をパッケージ化してブラウザで実行できるようにしたもの
 ZERONEIII.sb3 => 改造したやつのコード  
+NZCM.html => 下をパッケージ化してブラウザで実行できるようにしたもの
+NyankoZERONEIIIChartManager.sb3 => ZERONEIIIをいじれるようにするためのプロジェクト
 turbowarp-packager-settings.json => パッケージ化した時の設定
