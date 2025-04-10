@@ -6,5 +6,4 @@
 README.md => りーどみー!!!!!  
 index.html => 下をパッケージ化してブラウザで実行できるようにしたもの
 ZERONEIII.sb3 => 改造したやつのコード  
-NZCM.html => 元々譜面をいじったりするときに使っていたやつ  
 turbowarp-packager-settings.json => パッケージ化した時の設定
