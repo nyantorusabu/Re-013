@@ -6,4 +6,5 @@
 README.md => りーどみー!!!!!  
 index.html => 下をパッケージ化してブラウザで実行できるようにしたもの  
 ZERONEIII.sb3 => 改造したやつのコード  
-turbowarp-packager-settings.json => パッケージ化した時の設定
+settings.json => パッケージ化した時の設定  
+Sprites(フォルダ) => 配布用のスプライト(最新じゃなかったらTwitterとかで言ってね)
