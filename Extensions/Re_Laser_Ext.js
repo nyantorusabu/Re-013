@@ -3,63 +3,44 @@
 // Description: Re:Laser専用の拡張機能。Re:Laser以外で使用することは想定されていません。
 // By: nyantorusabu
 
-(function (Scratch) {
+(async function (Scratch) {
     "use strict";
 
-    const loadNDT = () => {
-        if (window.NDT) return Promise.resolve();
-        return new Promise((resolve, reject) => {
-            const script = document.createElement("script");
-            script.src = 'https://nyantorusabu.github.io/NDT/NekoDevTools.js';
-            script.onload = resolve;
-            script.onerror = reject;
-            document.body.appendChild(script);
-        });
-    };
+    // 初期設定とかその辺の関数
+    async function Extension_Setup() {
+        const Mods = [];
 
-    const loadfflate = () => {
-        if (window.fflate) return Promise.resolve();
-        return new Promise((resolve, reject) => {
-            const script = document.createElement("script");
-            script.src = 'https://unpkg.com/fflate@0.8.2';
-            script.onload = resolve;
-            script.onerror = reject;
-            document.body.appendChild(script);
-        });
-    };
+        const loadNDT = () => {
+            if (window.NDT) return Promise.resolve();
+            return new Promise((resolve, reject) => {
+                const script = document.createElement("script");
+                script.src = 'https://nyantorusabu.github.io/NDT/NekoDevTools.js';
+                script.onload = resolve;
+                script.onerror = reject;
+                document.body.appendChild(script);
+            });
+        };
+        const loadfflate = () => {
+            if (window.fflate) return Promise.resolve();
+            return new Promise((resolve, reject) => {
+                const script = document.createElement("script");
+                script.src = 'https://unpkg.com/fflate@0.8.2';
+                script.onload = resolve;
+                script.onerror = reject;
+                document.body.appendChild(script);
+            });
+        };
+
+        await loadNDT();
+        await loadfflate();
+    }
 
     class ReLaserExt {
-        constructor() {
-            // 拡張機能の初期化時にライブラリ読み込みを開始し、そのPromiseを保存する
-            this.NDTPromise = loadNDT().catch(err => {
-                console.error("NDTの読み込みに失敗しました: ", err);
-                // エラーを再スローして、awaitで捕捉できるようにする
-                throw err;
-            });
-            this.fflatePromise = loadfflate().catch(err => {
-                console.error("fflateの読み込みに失敗しました: ", err);
-                // エラーを再スローして、awaitで捕捉できるようにする
-                throw err;
-            });
-            const Mods = {};
-        }
-
         getInfo() {
             return GenerateBlocksInfo(
                 'ReLaserExt',
                 'Re:Laser',
                 blocks(
-                    label('ライブラリ'),
-                    block(
-                        'LibLoad',
-                        'C',
-                        'すべてのライブラリの読み込みを待機'
-                    ),
-                    block(
-                        'LibOK',
-                        'B',
-                        'ライブラリが利用可能'
-                    ),
                     label('譜面関係'),
                     block(
                         'GetAllChart',
@@ -90,6 +71,12 @@
                             'S',
                             'https://nyantorusabu.github.io/Re-013/Re：Laser.sb3'
                         )
+                    ),
+                    label('Mod関係'),
+                    block(
+                        'GetAllMods',
+                        'R',
+                        'すべてのMods'
                     ),
                     label('OPTION関係'),
                     block(
@@ -208,18 +195,6 @@
 
 
         // ブロックの定義
-        // ライブラリ
-        async LibLoad() {
-            await this.NDTPromise;
-            await this.fflatePromise;
-            return;
-        }
-        async LibOK() {
-            await this.NDTPromise;
-            await this.fflatePromise;
-            if (window.NDT && window.fflate) return true;
-            return false;
-        }
         // 譜面
         GetAllChart() {
             return _AllChart();
@@ -235,6 +210,10 @@
         }
         async ImportFromZIP(args) {
             await _ImportChart('ZIP', args.URL)
+        }
+        // Mod
+        GetAllMods() {
+            return JSON.stringify(Mods);
         }
         // 干渉
         mainVarList() {
@@ -286,7 +265,6 @@
             return JSON.stringify(JSON.parse(args.JSON).filter(v => v.startsWith(args.TEXT)));
         }
     }
-    Scratch.extensions.register(new ReLaserExt());
 
 
     // ブロック用関数
@@ -294,7 +272,7 @@
         return NDT.List.Get('譜面データ/charts').filter((c) => c.startsWith('#')).map((c) => c.slice(1).split('/')[0]);
     }
     function _toDataURL(DATA) {
-        return `data:application/octet-stream;base64,${DATA.toBase64()}`
+        return `data:application/octet-stream;base64,${Base64.encodeURI(DATA)}`
     }
     // 譜面をインポートする関数
     async function _ImportChart(MODE = 'sc', SRC) {
@@ -337,11 +315,13 @@
         const InstallModList = [];
         const LCcharts = NDT.List.Get('譜面データ/charts');
         let skip = false;
+        let title = '';
         for(const now of chartsAll) {
             const spl = now.split('/')
             if(now.startsWith('#')) {
-                skip = LCcharts.includes(now);
                 const name = spl[0].slice(1);
+                skip = LCcharts.includes(now);
+                title = name;
                 if(!(skip || NDT.Spr.Ast.Sou.NameList('MUSIC').includes(now))) {
                     let url;
                     if (Mode == 'zip' && Object.keys(PJZip).includes(sounds[name])) {
@@ -355,6 +335,10 @@
             if(!skip) {
                 if (spl[0].toLowerCase() == 'mod') {
                     InstallModList.push(spl[1]);
+                    Mods.push({
+                        id: spl[1],
+                        chart: title
+                    })
                 }
                 if (is_old && typeof now == 'number') {
                     const note = now.split('/');
@@ -384,6 +368,7 @@
                 for(const tnow of InstallModList) {
                     if (messages.includes(tnow)) {
                         install = true;
+                        Mods.filter((m) => m.id = tnow)[0].sprite = now.id;
                         break;
                     };
                 }
@@ -532,4 +517,8 @@
         chktype(args, 'object');
         return Object.assign({}, ...args);
     }
+
+    // セットアップを実行してから拡張機能を認証
+    await Extension_Setup();
+    Scratch.extensions.register(new ReLaserExt());
 })(Scratch);
