@@ -34,6 +34,14 @@
 
         await loadNDT();
         await loadfflate();
+
+        // 画面ロック用
+        NDT.NEve.Add('FLAG_AFTER', () => {
+            NDT.VM.postIOData("keyboard", {
+                key: ' ',
+                isDown: true,
+            });
+        });
     }
 
     class ReLaserExt {
@@ -273,7 +281,7 @@
         return NDT.List.Get('譜面データ/charts').filter((c) => c.startsWith('#')).map((c) => c.slice(1).split('/')[0]);
     }
     function _toDataURL(DATA) {
-        return `data:application/octet-stream;base64,${Base64.encodeURI(DATA)}`
+        return `data:application/octet-stream;base64,${DATA.toBase64()}`
     }
     // 譜面をインポートする関数
     async function _ImportChart(MODE = 'sc', SRC) {
@@ -341,8 +349,8 @@
                         chart: title
                     })
                 }
-                if (is_old && typeof now == 'number') {
-                    const note = now.split('/');
+                if (is_old && typeof spl[0] == 'number') {
+                    const note = now.spl;
                     note[2] = note[2] * 2;
                     LCcharts.push(note.join('/'));
                 } else {
@@ -369,7 +377,7 @@
                 for(const tnow of InstallModList) {
                     if (messages.includes(tnow)) {
                         install = true;
-                        Mods.filter((m) => m.id = tnow)[0].sprite = now.id;
+                        Mods.filter((m) => m.id = tnow)[0].sprite = now.name;
                         break;
                     };
                 }
@@ -399,11 +407,12 @@
                     const data = await res.arrayBuffer();
                     SPZip[tnow.md5ext] = data;
                 };
-                NDT.Spr.Add(_toDataURL(fflate.zipSync(SPZip, {
+                await NDT.Spr.Add(_toDataURL(fflate.zipSync(SPZip, {
                     level: 0
                 })))
             }
         }
+        NDT.Eve.Flag();
     }
 
 
