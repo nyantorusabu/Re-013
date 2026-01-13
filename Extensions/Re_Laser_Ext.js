@@ -6,10 +6,11 @@
 (async function (Scratch) {
     "use strict";
 
-    // 初期設定とかその辺の関数
-    async function Extension_Setup() {
-        const Mods = [];
+    // 変数定義
+    const Mods = [];
 
+    // ライブラリ読み込みとかその辺の関数
+    async function Extension_Setup() {
         const loadNDT = () => {
             if (window.NDT) return Promise.resolve();
             return new Promise((resolve, reject) => {
