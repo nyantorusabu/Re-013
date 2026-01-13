@@ -323,7 +323,7 @@
 
         const InstallModList = [];
         const LCcharts = NDT.List.Get('譜面データ/charts');
-        
+
         let skip = false;
         let title = '';
         for(const now of chartsAll) {
@@ -350,7 +350,7 @@
                         chart: title
                     })
                 }
-                if (is_old && typeof spl[0] == 'number') {
+                if (is_old && Number.isFinite(Number(spl[0]))) {
                     const note = spl;
                     note[2] = note[2] * 2;
                     LCcharts.push(note.join('/'));
