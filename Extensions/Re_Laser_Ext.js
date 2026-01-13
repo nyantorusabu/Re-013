@@ -41,7 +41,7 @@
                 // エラーを再スローして、awaitで捕捉できるようにする
                 throw err;
             });
-            const Mod = {};
+            const Mods = {};
         }
 
         getInfo() {
@@ -84,7 +84,7 @@
                     block(
                         'ImportFromZIP',
                         'C',
-                        'ProjectURL [URL] から譜面をインポート'
+                        'ProjectURL [URL] から譜面をインポート',
                         arg(
                             'URL',
                             'S',
@@ -321,8 +321,73 @@
 
         const targets = PJ.targets;
 
+        const main = targets.filter((t) => t.name == 'main')[0];
+        const music = targets.filter((t) => t.name == 'MUSIC')[0];
+        const stage = targets.filter((t) => t.isStage)[0];
+        const is_old = Object.keys(getVar(main)).includes('Editor-TIM');
+
+        const chartsAll = Object.keys(getList(stage)).includes('譜面データ/charts') ? getList(stage)['譜面データ/charts'] : getList(main).songsdata;
+        const soundsAll = music ? music.sounds : main.sounds;
+        const sounds = {};
+        for(const now of soundsAll) {
+            sounds[now.name] = now.md5ext;
+        }
+        const costumes = main.costumes;
+
+        const InstallModList = [];
+        const LCcharts = NDT.List.Get('譜面データ/charts');
+        let skip = false;
+        for(const now of chartsAll) {
+            const spl = now.split('/')
+            if(now.startsWith('#')) {
+                skip = LCcharts.includes(now);
+                const name = spl[0].slice(1);
+                if(!(skip || NDT.Spr.Ast.Sou.NameList('MUSIC').includes(now))) {
+                    let url;
+                    if (Mode == 'zip' && Object.keys(PJZip).includes(sounds[name])) {
+                        url = _toDataURL(PJZip[sounds[name]]);
+                    } else {
+                        url = `https://assets.scratch.mit.edu/internalapi/asset/${sounds[name]}/get`
+                    }
+                    await NDT.Spr.Ast.Sou.Add('MUSIC', name, url);
+                }
+            }
+            if(!skip) {
+                if (spl[0].toLowerCase() == 'mod') {
+                    InstallModList.push(spl[1]);
+                }
+                if (is_old && typeof now == 'number') {
+                    const note = now.split('/');
+                    note[2] = note[2] * 2;
+                    LCcharts.push(note.join('/'));
+                } else {
+                    LCcharts.push(now);
+                }
+            }
+        }
+        for(const now of costumes) {
+            if(!NDT.Spr.Ast.Cos.NameList('main').includes(now.name)) {
+                let url;
+                if (Mode == 'zip' && Object.keys(PJZip).includes(now.md5ext)) {
+                    url = _toDataURL(PJZip[now.md5ext]);
+                } else {
+                    url = `https://assets.scratch.mit.edu/internalapi/asset/${now.md5ext}/get`
+                }
+                await NDT.Spr.Ast.Cos.Add('main', now.name, url);
+            }
+        }
+
         for(const now of targets) {
-            if(!NDT.Spr.NameList.includes(now.name)) {
+            if(!(now.isStage || NDT.Spr.NameList.includes(now.name))) {
+                const messages = Object.values(now.blocks).filter((b) => b.opcode == 'event_whenbroadcastreceived').map((b) => b.fields.BROADCAST_OPTION[0]);
+                let install = false;
+                for(const tnow of InstallModList) {
+                    if (messages.includes(tnow)) {
+                        install = true;
+                        break;
+                    };
+                }
+                if (!install) continue;
                 const SPZip = {
                     'sprite.json': fflate.strToU8(JSON.stringify(now))
                 }
@@ -351,58 +416,6 @@
                 NDT.Spr.Add(_toDataURL(fflate.zipSync(SPZip, {
                     level: 0
                 })))
-                NDT.List.
-            }
-        }
-
-        const main = targets.filter((t) => t.name == 'main')[0];
-        const music = targets.filter((t) => t.name == 'MUSIC')[0];
-        const stage = targets.filter((t) => t.isStage)[0];
-        const is_old = Object.keys(getVar(main)).includes('Editor-TIM');
-
-        const chartsAll = Object.keys(getList(stage)).includes('譜面データ/charts') ? getList(stage)['譜面データ/charts'] : getList(main).songsdata;
-        const soundsAll = music ? music.sounds : main.sounds;
-        const sounds = {};
-        for(const now of soundsAll) {
-            sounds[now.name] = now.md5ext;
-        }
-        const costumes = main.costumes;
-
-        const LCcharts = NDT.List.Get('譜面データ/charts');
-        let skip = false;
-        for(const now of chartsAll) {
-            if(now.startsWith('#')) {
-                skip = LCcharts.includes(now);
-                const name = now.split('/')[0].slice(1);
-                if(!(skip || NDT.Spr.Ast.Sou.NameList('MUSIC').includes(now))) {
-                    let url;
-                    if (Mode == 'zip' && Object.keys(PJZip).includes(sounds[name])) {
-                        url = _toDataURL(PJZip[sounds[name]]);
-                    } else {
-                        url = `https://assets.scratch.mit.edu/internalapi/asset/${sounds[name]}/get`
-                    }
-                    await NDT.Spr.Ast.Sou.Add('MUSIC', name, url);
-                }
-            }
-            if(!skip) {
-                if (is_old && typeof now == 'number') {
-                    const note = now.split('/');
-                    note[2] = note[2] * 2;
-                    LCcharts.push(note.join('/'));
-                } else {
-                    LCcharts.push(now);
-                }
-            }
-        }
-        for(const now of costumes) {
-            if(!NDT.Spr.Ast.Cos.NameList('main').includes(now.name)) {
-                let url;
-                if (Mode == 'zip' && Object.keys(PJZip).includes(now.md5ext)) {
-                    url = _toDataURL(PJZip[now.md5ext]);
-                } else {
-                    url = `https://assets.scratch.mit.edu/internalapi/asset/${now.md5ext}/get`
-                }
-                await NDT.Spr.Ast.Cos.Add('main', now.name, url);
             }
         }
     }
