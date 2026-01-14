@@ -50,6 +50,12 @@
                 'ReLaserExt',
                 'Re:Laser',
                 blocks(
+                    label('システム'),
+                    block(
+                        'ReloadREL',
+                        'C',
+                        'Re:LASERをリロード'
+                    ),
                     label('譜面関係'),
                     block(
                         'GetAllChart',
@@ -63,7 +69,7 @@
                         arg(
                             'ID',
                             'N',
-                            '1179156622'
+                            '963833303'
                         )
                     ),
                     block(
@@ -79,12 +85,12 @@
                     block(
                         'DeleteAllChart',
                         'C',
-                        'すべての譜面/音源を削除'
+                        'すべての譜面/音源/Modを削除'
                     ),
                     block(
                         'DeleteChart',
                         'C',
-                        '譜面 [ID] と関連するModを削除',
+                        '譜面 [ID] と関連する音源/Modを削除',
                         arg(
                             'ID',
                             'S',
@@ -93,9 +99,29 @@
                     ),
                     label('Mod関係'),
                     block(
-                        'GetAllMods',
+                        'GetAllMod',
                         'R',
-                        'すべてのMods'
+                        'すべてのMod'
+                    ),
+                    label('外部アドオン関係'),
+                    block(
+                        'InstallAddon',
+                        'C',
+                        '[URL] から外部アドオンをインストール',
+                        arg(
+                            'URL',
+                            'S',
+                            'https://nyantorusabu.github.io/Re-013/Sprites/Addon/Re_BEAT.sprite3'
+                        )
+                    ),
+                    block(
+                        'UninstallAddon',
+                        'C',
+                        'アドオンID [ID] のアドオンをアンインストール',
+                        arg(
+                            'ID',
+                            'S'
+                        )
                     ),
                     label('OPTION関係'),
                     block(
@@ -214,13 +240,22 @@
 
 
         // ブロックの定義
+        // システム
+        ReloadREL() {
+            NDT.Eve.Flag();
+        }
         // 譜面
         GetAllChart() {
             return _AllChart();
         }
         DeleteAllChart() {
             for(const now of NDT.Spr.Ast.Sou.IDList('MUSIC')) {
-                NDT.Spr.Ast.Sou.Delete('MUSIC', now);
+                if (NDT.Spr.Ast.Sou.NameList('MUSIC').includes(now)) {
+                    NDT.Spr.Ast.Sou.Delete('MUSIC', now);
+                }
+                if (Mods.filter((m) => m.chart == now).length > 0) {
+                    NDT.Spr.Delete(Mods.filter((m) => m.chart == now)[0].sprite);
+                }
             }
             NDT.List.Get('譜面データ/charts').length = 0;
         }
@@ -229,6 +264,9 @@
             if (!_AllChart().includes(ID)) return;
             if (Mods.filter((m) => m.chart == ID).length > 0) {
                 NDT.Spr.Delete(Mods.filter((m) => m.chart == ID)[0].sprite);
+            }
+            if (NDT.Spr.Ast.Mus.NameList('MUSIC').includes(ID)) {
+                NDT.Spr.Ast.Mus.Delete('MUSIC', ID)
             }
             const index = _ChartData().findIndex((c) => c.startsWith(`#${ID}`));
             _ChartData().splice(index, 1);
@@ -243,9 +281,11 @@
             await _ImportChart('ZIP', args.URL)
         }
         // Mod
-        GetAllMods() {
+        GetAllMod() {
             return JSON.stringify(Mods);
         }
+        // 外部アドオン
+
         // 干渉
         mainVarList() {
             return JSON.stringify(NDT.Spr.Var.NameList('main'));
@@ -438,7 +478,6 @@
                 })))
             }
         }
-        NDT.Eve.Flag();
     }
 
 
