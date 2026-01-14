@@ -432,6 +432,7 @@
                 } else {
                     url = `https://assets.scratch.mit.edu/internalapi/asset/${now.md5ext}/get`
                 }
+                url = await resizeImage(url);
                 await NDT.Spr.Ast.Cos.Add('main', now.name, url);
             }
         }
@@ -478,6 +479,40 @@
                 })))
             }
         }
+    }
+    // リサイズ
+    async function resizeImage(url, maxWidth = 6, maxHeight = 6, sharp = true) {
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+
+            img.onload = () => {
+            let width = img.naturalWidth;
+            let height = img.naturalHeight;
+
+            if (width > maxWidth || height > maxHeight) {
+                const scale = Math.min(maxWidth / width, maxHeight / height);
+                width = Math.round(width * scale);
+                height = Math.round(height * scale);
+            }
+
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+
+            const ctx = canvas.getContext('2d');
+
+            ctx.imageSmoothingEnabled = !sharp;
+
+            ctx.drawImage(img, 0, 0, width, height);
+
+            const dataURL = canvas.toDataURL('image/png');
+            resolve(dataURL);
+            };
+
+            img.onerror = () => reject(new Error('画像の読み込みに失敗しました'));
+            img.src = url;
+        });
     }
 
 
