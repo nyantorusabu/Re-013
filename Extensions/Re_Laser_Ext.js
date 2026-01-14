@@ -232,7 +232,7 @@
             }
             const index = _ChartData().findIndex((c) => c.startsWith(`#${ID}`));
             _ChartData().splice(index, 1);
-            while(!(_ChartData()[index].startsWith('#') || _ChartData().length - 1 < index)) {
+            while(!(_ChartData().length - 1 < index || _ChartData()[index].startsWith('#'))) {
                 _ChartData().splice(index, 1);
             }
         }
