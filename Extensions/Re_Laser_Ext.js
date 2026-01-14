@@ -57,11 +57,6 @@
                         'すべての譜面'
                     ),
                     block(
-                        'DeleteAllChart',
-                        'C',
-                        'すべての譜面/音源を削除'
-                    ),
-                    block(
                         'ImportFromScratch',
                         'C',
                         'PJID [ID] から譜面をインポート',
@@ -79,6 +74,21 @@
                             'URL',
                             'S',
                             'https://nyantorusabu.github.io/Re-013/Re：Laser.sb3'
+                        )
+                    ),
+                    block(
+                        'DeleteAllChart',
+                        'C',
+                        'すべての譜面/音源を削除'
+                    ),
+                    block(
+                        'DeleteChart',
+                        'C',
+                        '譜面 [ID] と関連するModを削除',
+                        arg(
+                            'ID',
+                            'S',
+                            _AllChart()[0]
                         )
                     ),
                     label('Mod関係'),
@@ -214,6 +224,18 @@
             }
             NDT.List.Get('譜面データ/charts').length = 0;
         }
+        DeleteChart(args) {
+            const ID = args.ID;
+            if (!_AllChart().includes(ID)) return;
+            if (Mods.filter((m) => m.chart == ID).length > 0) {
+                NDT.Spr.Delete(Mods.filter((m) => m.chart == ID)[0].sprite);
+            }
+            const index = _ChartData().findIndex((c) => c.startsWith(`#${ID}`));
+            _ChartData().splice(index, 1);
+            while(!(_ChartData()[index].startsWith('#') || _ChartData().length - 1 < index)) {
+                _ChartData().splice(index, 1);
+            }
+        }
         async ImportFromScratch(args) {
             await _ImportChart('SC', args.ID);
         }
@@ -278,7 +300,10 @@
 
     // ブロック用関数
     function _AllChart() {
-        return NDT.List.Get('譜面データ/charts').filter((c) => c.startsWith('#')).map((c) => c.slice(1).split('/')[0]);
+        return _ChartData().filter((c) => c.startsWith('#')).map((c) => c.slice(1).split('/')[0]);
+    }
+    function _ChartData() {
+        return NDT.List.Get('譜面データ/charts');
     }
     function _toDataURL(DATA) {
         return `data:application/octet-stream;base64,${DATA.toBase64()}`
