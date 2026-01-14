@@ -432,7 +432,9 @@
                 } else {
                     url = `https://assets.scratch.mit.edu/internalapi/asset/${now.md5ext}/get`
                 }
-                url = await resizeImage(url);
+                if (is_old) {
+                    url = await resizeImage(url);
+                }
                 await NDT.Spr.Ast.Cos.Add('main', now.name, url);
             }
         }
