@@ -130,7 +130,10 @@
 		}
 		GenerateMFest() {
 			const target = NDT.Spr.Editing;
-			if (Object.keys(target).includes('mfest')) return;
+			if (Object.keys(target).includes('mfest')) {
+				window.alert('既に@manifestが存在します');
+				return;
+			}
 			const mfest = {
 				id: crypto.randomUUID(),
 				name: target.getName(),
