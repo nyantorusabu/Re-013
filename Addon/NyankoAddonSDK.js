@@ -9,22 +9,38 @@
 	// 変数定義
 
 	// ライブラリ読み込みとかその辺の関数
-	async function Extension_Setup() {}
+	async function Extension_Setup() {
+		const loadNDT = () => {
+			if (window.NDT) return Promise.resolve();
+			return new Promise((resolve, reject) => {
+				const script = document.createElement('script');
+				script.src =
+					'https://nyantorusabu.github.io/NDT/NekoDevTools.js';
+				script.onload = resolve;
+				script.onerror = reject;
+				document.body.appendChild(script);
+			});
+		};
+
+		await loadNDT();
+	}
 
 	class NASDK {
 		getInfo() {
 			return GenerateBlocksInfo(
 				'NASDK',
 				'NyankoAddonSDK',
-				blocks(label('@manifest'), {
-					blockType: BlockType.BUTTON,
-					text: '',
-					func: ''
-				})
+				blocks(
+					label('@manifest'),
+					button('アドオンを新規作成', 'CreateAddon'),
+					button('@manifestを編集', 'EditMFest')
+				)
 			);
 		}
 
 		// ブロックの定義
+		CreateAddon() {}
+		EditMFest() {}
 	}
 	// NyankoExtensionCreater
 	// 短縮表現変換
@@ -114,6 +130,15 @@
 	function blocks(...blocks) {
 		chktype(blocks, 'object');
 		return blocks;
+	}
+	function button(text, func) {
+		chktype(text, 'string');
+		chktype(func, 'string');
+		return {
+			blockType: Scratch.BlockType.BUTTON,
+			text: text,
+			func: func,
+		};
 	}
 	function arg(id, type, def = '', menu = '') {
 		chktype(type, 'string');
