@@ -42,43 +42,91 @@
 				'NASDK',
 				'NyankoAddonSDK',
 				blocks(
-					label('アドオン'),
+					label('操作'),
+					label('ファイル'),
 					button('外部アドオンを新規作成', 'CreateAddon'),
 					button('外部アドオンを開く', 'LoadAddon'),
+					button('外部アドオンを保存', 'SaveAddon'),
+					button('外部アドオンをアップロード', 'UploadAddon'),
+					label('AddonV1'),
+					button('AddonV1を開く', 'LoadAddonV1'),
 					button('AddonV1>V2移行', 'V1ToV2'),
 					label('@manifest'),
 					button('@manifestを生成', 'GenerateMFest'),
-					button('@manifestを編集', 'EditMFest')
+					button('@manifestを編集', 'EditMFest'),
+					'---',
+					label('ブロック'),
+					label('取得'),
+					block(
+						'GetRLVar',
+						'R',
+						'RLVar [ID]',
+						arg('ID', 'S', 'GMain')
+					)
 				)
 			);
 		}
 
 		// ブロックの定義
+		GetRLVar(args) {
+			const RLVarList = {
+				GMain: NDT.Var.Get('GAME.main'),
+				GSub: NDT.Var.Get('GAME.sub'),
+			};
+
+			const ID = args.ID;
+			if (!Object.keys(RLVarList).includes(ID)) return '';
+			return RLVarList[ID];
+		}
 		async CreateAddon() {
+			const mfest = {
+				id: crypto.randomUUID(),
+				name: window.prompt('アドオンの名前を入力'),
+				description: window.prompt('アドオンの説明を入力'),
+				author: window.prompt('あなたのニックネームを入力'),
+				version: '1.0.0',
+				runner: 'SPRITE',
+			};
 			await NDT.Spr.Add(
 				'https://nyantorusabu.github.io/Re-013/Addon/Template.sprite3'
 			);
+			NDT.Spr.Get('Template').mfest = mfest;
+			NDT.Spr.Rename('Template', mfest.name);
+		}
+		async LoadAddon() {
+			await _LoadAddon(await NDT.Upload('.naddon'));
+		}
+		async SaveAddon() {
+			const target = NDT.Spr.Editing;
+			const SP = await NDT.VM.exportSprite(target.id);
+			const aB = await SP.arrayBuffer();
+			const U8A = new Uint8Array(aB);
+			const AD = {
+				'manifest.json': fflate.strToU8(JSON.stringify(target.mfest)),
+				'sprite.sprite3': U8A,
+			};
+			const ADZip = fflate.zipSync(AD, {
+				level: 0,
+			});
+			const a = document.createElement('a');
+			a.href = URL.createObjectURL(
+				new Blob([ADZip], { type: 'application/zip' })
+			);
+			a.download = `${target.mfest.name}.naddon`;
+			a.click();
+			URL.revokeObjectURL(a.href);
 		}
 		V1ToV2() {
-			const target = NDT.Spr.Editing;
-
-			const CMT = Object.values(target.comments).map((c) => c.text);
-			if (!CMT.filter((c) => c.includes('@manifest')).length > 0) {
-				window.alert(
-					`スプライト"${target.getName()}"はAddonV1ではありません`
-				);
-				return;
-			}
-			const mfest = JSON.parse(
-				CMT.filter((c) => c.includes('@manifest'))[0].replace(
-					'@manifest',
-					''
-				)
-			);
-			delete mfest.restart;
-			mfest.runner = 'SPRITE';
-			target.mfest = mfest;
+			_V1ToV2(NDT.Spr.Editing.id);
 			window.alert(`AddonV1>V2の移行が完了しました`);
+		}
+		async LoadAddonV1() {
+			const URL = await NDT.Upload('.sprite3');
+			const data = new Uint8Array(await (await fetch(URL)).arrayBuffer());
+			const SPZip = fflate.unzipSync(data);
+			const SP = JSON.parse(fflate.strFromU8(SPZip['sprite.json']));
+			await NDT.Spr.Add(URL);
+			_V1ToV2(SP.name);
 		}
 		GenerateMFest() {
 			const target = NDT.Spr.Editing;
@@ -95,6 +143,87 @@
 			window.alert(`@manifestを生成しました`);
 		}
 		EditMFest() {}
+	}
+
+	function _V1ToV2(SprID) {
+		const List = {
+			'GAME.main': 'GMain',
+			'GAME.sub': 'GSub',
+		};
+		const target = NDT.Spr.Get(SprID);
+
+		const CMT = Object.entries(target.comments).filter((c) =>
+			c[1].text.includes('@manifest')
+		)[0];
+		if (target.mfest || !CMT) {
+			window.alert(
+				`スプライト"${target.getName()}"はAddonV1ではありません`
+			);
+			return;
+		}
+		const mfest = JSON.parse(CMT[1].text.replace('@manifest', ''));
+		delete mfest.restart;
+		mfest.runner = 'SPRITE';
+		target.mfest = mfest;
+		delete target.comments[CMT[0]];
+		const BLO = Object.values(target.blocks._blocks).filter(
+			(b) =>
+				b.opcode == 'sensing_of' &&
+				Object.keys(List).filter((k) => k == b.fields.PROPERTY.value)
+					.length > 0
+		);
+		if (BLO) {
+			for (const now of BLO) {
+				const id = GenerateUid();
+				const b = target.blocks._blocks[now.id];
+				target.blocks._blocks[id] = {
+					id: id,
+					opcode: 'text',
+					inputs: {},
+					fields: {
+						TEXT: {
+							id: undefined,
+							name: 'TEXT',
+							value: List[b.fields.PROPERTY.value],
+						},
+					},
+					next: null,
+					topLevel: false,
+					parent: now.id,
+					shadow: true,
+				};
+				const OBJ = b.inputs.OBJECT;
+				if (OBJ.shadow == OBJ.block) {
+					delete target.blocks._blocks[OBJ.block];
+				}
+				delete target.blocks._blocks[OBJ.shadow];
+				b.opcode = 'NASDK_GetRLVar';
+				b.inputs = {
+					ID: {
+						name: 'ID',
+						block: id,
+						shadow: id,
+					},
+				};
+				b.fields = {};
+			}
+		}
+		NDT.VM.emitWorkspaceUpdate();
+	}
+	async function _LoadAddon(URL) {
+		const res = await fetch(URL);
+		const data = await res.arrayBuffer();
+		const U8A = new Uint8Array(data);
+		const ADZip = fflate.unzipSync(U8A);
+		const SPURL = `data:application/octet-stream;base64,${ADZip[
+			'sprite.sprite3'
+		].toBase64()}`;
+		const SPZip = fflate.unzipSync(ADZip['sprite.sprite3']);
+		const SP = JSON.parse(fflate.strFromU8(SPZip['sprite.json']));
+		await NDT.Spr.Add(SPURL);
+		NDT.Spr.Get(SP.name).mfest = JSON.parse(
+			fflate.strFromU8(ADZip['manifest.json'])
+		);
 	}
 	// NyankoExtensionCreater
 	// 短縮表現変換
@@ -220,6 +349,12 @@
 	function args(...args) {
 		chktype(args, 'object');
 		return Object.assign({}, ...args);
+	}
+	function GenerateUid() {
+		return (
+			Math.random().toString(36).substring(2, 12) +
+			Math.random().toString(36).substring(2, 12)
+		);
 	}
 
 	// セットアップを実行してから拡張機能を認証

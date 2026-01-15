@@ -278,7 +278,8 @@
 	async function _InstallAddon(URL) {
 		const res = await fetch(URL);
 		const data = await res.arrayBuffer();
-		const SPZip = fflate.unzipSync(data);
+		const U8A = new Uint8Array(data);
+		const SPZip = fflate.unzipSync(U8A);
 		const SP = JSON.parse(fflate.strFromU8(SPZip['sprite.json']));
 
 		const CMT = Object.values(SP.comments).map((c) => c.text);
@@ -320,7 +321,8 @@
 		} else if (Mode == 'zip') {
 			const res = await fetch(SRC);
 			const data = await res.arrayBuffer();
-			const PJZip = fflate.unzipSync(data);
+			const U8A = new Uint8Array(data);
+			const PJZip = fflate.unzipSync(U8A);
 			PJ = JSON.parse(fflate.strFromU8(PJZip['project.json']));
 		}
 
