@@ -103,7 +103,7 @@
 			const U8A = new Uint8Array(aB);
 			const AD = {
 				'manifest.json': fflate.strToU8(JSON.stringify(target.mfest)),
-				'sprite.sprite3': U8A,
+				'addon.sprite3': U8A,
 			};
 			const ADZip = fflate.zipSync(AD, {
 				level: 0,
@@ -221,7 +221,7 @@
 		const SPURL = `data:application/octet-stream;base64,${ADZip[
 			'sprite.sprite3'
 		].toBase64()}`;
-		const SPZip = fflate.unzipSync(ADZip['sprite.sprite3']);
+		const SPZip = fflate.unzipSync(ADZip['addon.sprite3']);
 		const SP = JSON.parse(fflate.strFromU8(SPZip['sprite.json']));
 		await NDT.Spr.Add(SPURL);
 		NDT.Spr.Get(SP.name).mfest = JSON.parse(
