@@ -63,7 +63,16 @@
 						'RLVar [ID]',
 						arg('ID', 'S', 'GMain')
 					)
-				)
+				),
+				{
+					menuIconURI:
+						'https://nyantorusabu.github.io/Re-013/Addon/NASDK/Icon.svg',
+					blockIconURI:
+						'https://nyantorusabu.github.io/Re-013/Addon/NASDK/Icon.svg',
+					color1: '#ffad87',
+					color2: '#ff9c6e',
+					color3: '#ff8a54',
+				}
 			);
 		}
 
