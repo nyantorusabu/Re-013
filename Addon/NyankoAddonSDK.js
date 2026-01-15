@@ -21,8 +21,19 @@
 				document.body.appendChild(script);
 			});
 		};
+		const loadfflate = () => {
+			if (window.fflate) return Promise.resolve();
+			return new Promise((resolve, reject) => {
+				const script = document.createElement('script');
+				script.src = 'https://unpkg.com/fflate@0.8.2';
+				script.onload = resolve;
+				script.onerror = reject;
+				document.body.appendChild(script);
+			});
+		};
 
 		await loadNDT();
+		await loadfflate();
 	}
 
 	class NASDK {
@@ -31,15 +42,58 @@
 				'NASDK',
 				'NyankoAddonSDK',
 				blocks(
+					label('アドオン'),
+					button('外部アドオンを新規作成', 'CreateAddon'),
+					button('外部アドオンを開く', 'LoadAddon'),
+					button('AddonV1>V2移行', 'V1ToV2'),
 					label('@manifest'),
-					button('アドオンを新規作成', 'CreateAddon'),
+					button('@manifestを生成', 'GenerateMFest'),
 					button('@manifestを編集', 'EditMFest')
 				)
 			);
 		}
 
 		// ブロックの定義
-		CreateAddon() {}
+		async CreateAddon() {
+			await NDT.Spr.Add(
+				'https://nyantorusabu.github.io/Re-013/Addon/Template.sprite3'
+			);
+		}
+		V1ToV2() {
+			const target = NDT.Spr.Editing;
+
+			const CMT = Object.values(target.comments).map((c) => c.text);
+			if (!CMT.filter((c) => c.includes('@manifest')).length > 0) {
+				window.alert(
+					`スプライト"${target.getName()}"はAddonV1ではありません`
+				);
+				return;
+			}
+			const mfest = JSON.parse(
+				CMT.filter((c) => c.includes('@manifest'))[0].replace(
+					'@manifest',
+					''
+				)
+			);
+			delete mfest.restart;
+			mfest.runner = 'SPRITE';
+			target.mfest = mfest;
+			window.alert(`AddonV1>V2の移行が完了しました`);
+		}
+		GenerateMFest() {
+			const target = NDT.Spr.Editing;
+			if (Object.keys(target).includes('mfest')) return;
+			const mfest = {
+				id: crypto.randomUUID(),
+				name: target.getName(),
+				description: window.prompt('アドオンの説明を入力'),
+				author: window.prompt('あなたのニックネームを入力'),
+				version: '1.0.0',
+				runner: 'SPRITE',
+			};
+			target.mfest = mfest;
+			window.alert(`@manifestを生成しました`);
+		}
 		EditMFest() {}
 	}
 	// NyankoExtensionCreater
