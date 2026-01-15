@@ -97,7 +97,7 @@
 				runner: 'SPRITE',
 			};
 			await NDT.Spr.Add(
-				'https://nyantorusabu.github.io/Re-013/Addon/Template.sprite3'
+				'https://nyantorusabu.github.io/Re-013/Addon/NASDK/Template.sprite3'
 			);
 			NDT.Spr.Get('Template').mfest = mfest;
 			NDT.Spr.Rename('Template', mfest.name);
