@@ -65,9 +65,9 @@
 				),
 				{
 					menuIconURI:
-						'https://nyantorusabu.github.io/Re-013/Asset/NASDK/Menu.png',
+						'https://nyantorusabu.github.io/Re-013/Asset/NASDK/menu.png',
 					blockIconURI:
-						'https://nyantorusabu.github.io/Re-013/Asset/NASDK/Block.png',
+						'https://nyantorusabu.github.io/Re-013/Asset/NASDK/block.png',
 					color1: '#ffad87',
 					color2: '#ff9c6e',
 					color3: '#ff8a54',

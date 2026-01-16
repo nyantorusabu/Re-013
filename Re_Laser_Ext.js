@@ -167,9 +167,9 @@
 				),
 				{
 					menuIconURI:
-						'https://nyantorusabu.github.io/Re-013/Asset/NA/Menu.png',
+						'https://nyantorusabu.github.io/Re-013/Asset/NA/menu.png',
 					blockIconURI:
-						'https://nyantorusabu.github.io/Re-013/Asset/NA/Block.png',
+						'https://nyantorusabu.github.io/Re-013/Asset/NA/block.png',
 					color1: '#ffad87',
 					color2: '#ff9c6e',
 					color3: '#ff8a54',
