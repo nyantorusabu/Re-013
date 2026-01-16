@@ -76,7 +76,7 @@
 						'DeleteChart',
 						'C',
 						'譜面 [ID] と関連する音源/Modを削除',
-						arg('ID', 'S', _AllChart()[0])
+						arg('ID', 'S', 'ライアーダンサー')
 					),
 					label('Mod関係'),
 					block('GetAllMod', 'R', 'すべてのMod'),
