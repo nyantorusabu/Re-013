@@ -47,7 +47,6 @@
 					button('外部アドオンを新規作成', 'CreateAddon'),
 					button('外部アドオンを開く', 'LoadAddon'),
 					button('外部アドオンを保存', 'SaveAddon'),
-					button('外部アドオンをアップロード', 'UploadAddon'),
 					label('AddonV1'),
 					button('AddonV1を開く', 'LoadAddonV1'),
 					button('AddonV1>V2移行', 'V1ToV2'),
@@ -66,9 +65,9 @@
 				),
 				{
 					menuIconURI:
-						'https://nyantorusabu.github.io/Re-013/Addon/NASDK/Menu.png',
+						'https://nyantorusabu.github.io/Re-013/Asset/NASDK/Menu.png',
 					blockIconURI:
-						'https://nyantorusabu.github.io/Re-013/Addon/NASDK/Block.png',
+						'https://nyantorusabu.github.io/Re-013/Asset/NASDK/Block.png',
 					color1: '#ffad87',
 					color2: '#ff9c6e',
 					color3: '#ff8a54',
@@ -94,10 +93,9 @@
 				description: window.prompt('アドオンの説明を入力'),
 				author: window.prompt('あなたのニックネームを入力'),
 				version: '1.0.0',
-				runner: 'SPRITE',
 			};
 			await NDT.Spr.Add(
-				'https://nyantorusabu.github.io/Re-013/Addon/NASDK/Template.sprite3'
+				'https://nyantorusabu.github.io/Re-013/Asset/NASDK/Template.sprite3'
 			);
 			NDT.Spr.Get('Template').mfest = mfest;
 			NDT.Spr.Rename('Template', mfest.name);
@@ -149,7 +147,6 @@
 				description: window.prompt('アドオンの説明を入力'),
 				author: window.prompt('あなたのニックネームを入力'),
 				version: '1.0.0',
-				runner: 'SPRITE',
 			};
 			target.mfest = mfest;
 			window.alert(`@manifestを生成しました`);

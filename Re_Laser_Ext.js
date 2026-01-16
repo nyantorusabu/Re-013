@@ -36,6 +36,13 @@
 
 		await loadNDT();
 		await loadfflate();
+
+		NDT.NEve.Add('FLAG_AFTER', () => {
+			NDT.VM.postIOData('keyboard', {
+				key: ' ',
+				isDown: true,
+			});
+		});
 	}
 
 	class ReLaserExt {
@@ -96,6 +103,15 @@
 					block('LoadOption', 'C', '設定を読み込み'),
 					label('mainスプライト'),
 					block(
+						'GAMEor',
+						'B',
+						'GAME. [main] [sub]',
+						args(
+							arg('main', 's', 'menu'),
+							arg('sub', 's', 'senkyoku_wait_choice')
+						)
+					),
+					block(
 						'mainVarList',
 						'R',
 						'mainスプライトのすべてのローカル変数'
@@ -148,7 +164,16 @@
 							arg('TEXT', 'S', 'ご')
 						)
 					)
-				)
+				),
+				{
+					menuIconURI:
+						'https://nyantorusabu.github.io/Re-013/Asset/NA/Menu.png',
+					blockIconURI:
+						'https://nyantorusabu.github.io/Re-013/Asset/NA/Block.png',
+					color1: '#ffad87',
+					color2: '#ff9c6e',
+					color3: '#ff8a54',
+				}
 			);
 		}
 
@@ -206,7 +231,13 @@
 		}
 		// 外部アドオン
 
-		// 干渉
+		// Mainスプライト
+		GAMEor(args) {
+			return (
+				NDT.Var.Get('GAME.main') == args.main &&
+				NDT.Var.Get('GAME.sub') == args.sub
+			);
+		}
 		mainVarList() {
 			return JSON.stringify(NDT.Spr.Var.NameList('main'));
 		}
