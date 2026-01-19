@@ -60,8 +60,8 @@
 						'GetRLVar',
 						'R',
 						'RLVar [ID]',
-						arg('ID', 'S', 'GMain')
-					)
+						arg('ID', 'S', 'GMain'),
+					),
 				),
 				{
 					menuIconURI:
@@ -71,7 +71,7 @@
 					color1: '#ffad87',
 					color2: '#ff9c6e',
 					color3: '#ff8a54',
-				}
+				},
 			);
 		}
 
@@ -94,11 +94,11 @@
 				author: window.prompt('あなたのニックネームを入力'),
 				version: '1.0.0',
 			};
-			await NDT.Spr.Add(
-				'https://nyantorusabu.github.io/Re-013/Asset/NASDK/Template.sprite3'
+			const Spr = await NDT.Spr.Add(
+				'https://nyantorusabu.github.io/Re-013/Asset/NASDK/Template.sprite3',
 			);
-			NDT.Spr.Get('Template').mfest = mfest;
-			NDT.Spr.Rename('Template', mfest.name);
+			NDT.Spr.Get(Spr.id).mfest = mfest;
+			NDT.Spr.Rename(Spr.id, mfest.name);
 		}
 		async LoadAddon() {
 			await _LoadAddon(await NDT.Upload('.naddon'));
@@ -110,14 +110,14 @@
 			const U8A = new Uint8Array(aB);
 			const AD = {
 				'manifest.json': fflate.strToU8(JSON.stringify(target.mfest)),
-				'addon.sprite3': U8A,
+				'sprite.sprite3': U8A,
 			};
 			const ADZip = fflate.zipSync(AD, {
 				level: 0,
 			});
 			const a = document.createElement('a');
 			a.href = URL.createObjectURL(
-				new Blob([ADZip], { type: 'application/zip' })
+				new Blob([ADZip], { type: 'application/zip' }),
 			);
 			a.download = `${target.mfest.name}.naddon`;
 			a.click();
@@ -132,8 +132,7 @@
 			const data = new Uint8Array(await (await fetch(URL)).arrayBuffer());
 			const SPZip = fflate.unzipSync(data);
 			const SP = JSON.parse(fflate.strFromU8(SPZip['sprite.json']));
-			await NDT.Spr.Add(URL);
-			_V1ToV2(SP.name);
+			_V1ToV2((await NDT.Spr.Add(URL)).id);
 		}
 		GenerateMFest() {
 			const target = NDT.Spr.Editing;
@@ -162,24 +161,23 @@
 		const target = NDT.Spr.Get(SprID);
 
 		const CMT = Object.entries(target.comments).filter((c) =>
-			c[1].text.includes('@manifest')
+			c[1].text.includes('@manifest'),
 		)[0];
 		if (target.mfest || !CMT) {
 			window.alert(
-				`スプライト"${target.getName()}"はAddonV1ではありません`
+				`スプライト"${target.getName()}"はAddonV1ではありません`,
 			);
 			return;
 		}
 		const mfest = JSON.parse(CMT[1].text.replace('@manifest', ''));
 		delete mfest.restart;
-		mfest.runner = 'SPRITE';
 		target.mfest = mfest;
 		delete target.comments[CMT[0]];
 		const BLO = Object.values(target.blocks._blocks).filter(
 			(b) =>
 				b.opcode == 'sensing_of' &&
 				Object.keys(List).filter((k) => k == b.fields.PROPERTY.value)
-					.length > 0
+					.length > 0,
 		);
 		if (BLO) {
 			for (const now of BLO) {
@@ -227,13 +225,14 @@
 		const SPURL = `data:application/octet-stream;base64,${ADZip[
 			'sprite.sprite3'
 		].toBase64()}`;
-		const SPZip = fflate.unzipSync(ADZip['addon.sprite3']);
+		const SPZip = fflate.unzipSync(ADZip['sprite.sprite3']);
 		const SP = JSON.parse(fflate.strFromU8(SPZip['sprite.json']));
-		await NDT.Spr.Add(SPURL);
-		NDT.Spr.Get(SP.name).mfest = JSON.parse(
-			fflate.strFromU8(ADZip['manifest.json'])
+		const Spr = await NDT.Spr.Add(SPURL);
+		NDT.Spr.Get(Spr.id).mfest = JSON.parse(
+			fflate.strFromU8(ADZip['manifest.json']),
 		);
 	}
+
 	// NyankoExtensionCreater
 	// 短縮表現変換
 	function abbreviation(code, ...link) {
@@ -255,7 +254,7 @@
 		if (typeof data !== type) {
 			log(
 				'e',
-				`引数に指定できない型が指定されています!: 入力=>${typeof data} 要求=>${type}`
+				`引数に指定できない型が指定されています!: 入力=>${typeof data} 要求=>${type}`,
 			);
 		}
 	}
@@ -289,7 +288,7 @@
 			'REPORTER',
 			'BOOLEAN',
 			'HAT',
-			'EVENT'
+			'EVENT',
 		);
 
 		// argsの確認
@@ -300,7 +299,7 @@
 			if (!allinputargs.includes(chk)) {
 				log(
 					'w',
-					`block"${opcode}"に必要なargが渡されていません: ${chk}`
+					`block"${opcode}"に必要なargが渡されていません: ${chk}`,
 				);
 			}
 		}
@@ -308,7 +307,7 @@
 			if (!allblockargs.includes(chk)) {
 				log(
 					'w',
-					`block"${opcode}"に不必要なargが渡されています: ${chk}`
+					`block"${opcode}"に不必要なargが渡されています: ${chk}`,
 				);
 			}
 		}
@@ -345,7 +344,7 @@
 			'MATRIX',
 			'NOTE',
 			'IMAGE',
-			'COLOR'
+			'COLOR',
 		);
 		return {
 			[id]: {

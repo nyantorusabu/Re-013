@@ -7,8 +7,47 @@
 	'use strict';
 
 	// 変数定義
+	const AddonOption = {
+		NYADDON: {
+			System: {
+				ID: {
+					text: 'Username',
+					type: 'input',
+					default: 'Guest',
+				},
+			},
+			Touch: {
+				isActive: {
+					text: 'NyankoTouch',
+					type: 'boolean',
+					default: false,
+				},
+				Type: {
+					text: 'Types of Boxes',
+					type: 'list',
+					list: ['1', '2'],
+					default: '1',
+				},
+			},
+		},
+	};
 	const Mods = [];
 	const Addons = [];
+	const AddonSprite = {};
+	const ChartUser = {};
+	const HScore = {};
+	const Var = {};
+
+	let Setup = false;
+	let Loaded = false;
+	const PressKeys = [];
+	const PressingKeys = [];
+
+	const ChartStore = [];
+
+	window.NYADDON = {};
+	NYADDON.Option = AddonOption;
+	NYADDON.SetOption = _SetOption;
 
 	// ライブラリ読み込みとかその辺の関数
 	async function Extension_Setup() {
@@ -36,12 +75,48 @@
 
 		await loadNDT();
 		await loadfflate();
+		if (NDT.Spr.NameList.includes('main')) {
+			await _Setup();
+		}
 
-		NDT.NEve.Add('FLAG_AFTER', () => {
+		NDT.NEve.Add('FLAG_BEFORE', () => {
+			if (!Loaded) return;
 			NDT.VM.postIOData('keyboard', {
 				key: ' ',
 				isDown: true,
 			});
+		});
+		NDT.NEve.Add('FLAG_AFTER', () => {
+			Loaded = true;
+		});
+		NDT.NEve.Add('STEP_BEFORE', () => {
+			if (PressingKeys.length > 0) {
+				for (const now of PressingKeys) {
+					NDT.VM.postIOData('keyboard', {
+						key: now,
+						isDown: true,
+					});
+				}
+			}
+		});
+		NDT.NEve.Add('STEP_AFTER', () => {
+			if (PressingKeys.length > 0) {
+				for (const now of PressingKeys) {
+					NDT.VM.postIOData('keyboard', {
+						key: now,
+						isDown: false,
+					});
+				}
+				PressingKeys.length = 0;
+			}
+			if (PressKeys.length > 0) {
+				PressingKeys.push(...PressKeys);
+				PressKeys.length = 0;
+			}
+		});
+		NDT.NEve.Add('NYADDON_SETUP', async () => {
+			await _Setup();
+			NDT.Eve.Flag();
 		});
 	}
 
@@ -51,15 +126,41 @@
 				'ReLaserExt',
 				'Re:Laser',
 				blocks(
+					label('仮変数'),
+					block(
+						'Var_Get',
+						'R',
+						'仮変数 [VarID]',
+						arg('VarID', 'S', 'r1'),
+					),
+					block(
+						'Var_Set',
+						'C',
+						'仮変数 [VarID] を [Value] にする',
+						args(arg('VarID', 'S', 'r1'), arg('Value', 'S', '0')),
+					),
+					block(
+						'Var_Change',
+						'C',
+						'仮変数 [VarID] を [Value] ずつ変える',
+						args(arg('VarID', 'S', 'r1'), arg('Value', 'S', '1')),
+					),
 					label('システム'),
+					block('Setup', 'C', '初期設定'),
 					block('Reload', 'C', 'Re:LASERをリロード'),
 					label('譜面関係'),
 					block('GetAllChart', 'R', 'すべての譜面'),
 					block(
+						'GetChartFrom',
+						'R',
+						'譜面 [ChaID] の制作者',
+						arg('ChaID', 'S', 'ライアーダンサー'),
+					),
+					block(
 						'ImportFromScratch',
 						'C',
 						'PJID [ID] から譜面をインポート',
-						arg('ID', 'N', '963833303')
+						arg('ID', 'N', '963833303'),
 					),
 					block(
 						'ImportFromZIP',
@@ -68,15 +169,33 @@
 						arg(
 							'URL',
 							'S',
-							'https://nyantorusabu.github.io/Re-013/Re：Laser.sb3'
-						)
+							'https://nyantorusabu.github.io/Re-013/NYADDON.sb3',
+						),
 					),
-					block('DeleteAllChart', 'C', 'すべての譜面/音源/Modを削除'),
+					block('DeleteAllChart', 'C', 'すべての譜面/アセットを削除'),
 					block(
 						'DeleteChart',
 						'C',
-						'譜面 [ID] と関連する音源/Modを削除',
-						arg('ID', 'S', 'ライアーダンサー')
+						'譜面 [ID] と関連するアセットを削除',
+						arg('ID', 'S', 'ライアーダンサー'),
+					),
+					block(
+						'SetCStore',
+						'C',
+						'スタジオID [ID] から譜面を取得',
+						arg('ID', 'N', '26812335'),
+					),
+					block(
+						'isCStoreLoaded',
+						'B',
+						'読み込み済みのコミュニティ譜面がある',
+					),
+					block('CStorelength', 'R', 'コミュニティ譜面の数'),
+					block(
+						'GetCStoreChart',
+						'R',
+						'[POS] 番目のコミュニティ譜面の [TYPE]',
+						args(arg('POS', 'N', '1'), arg('TYPE', 'S', 'id')),
 					),
 					label('Mod関係'),
 					block('GetAllMod', 'R', 'すべてのMod'),
@@ -88,19 +207,126 @@
 						arg(
 							'URL',
 							'S',
-							'https://nyantorusabu.github.io/Re-013/Sprites/Addon/Re_BEAT.sprite3'
-						)
+							'https://nyantorusabu.github.io/Re-013/Sprites/Addon/Re_BEAT.sprite3',
+						),
 					),
 					block(
 						'UninstallAddon',
 						'C',
 						'アドオンID [ID] のアドオンをアンインストール',
-						arg('ID', 'S')
+						arg('ID', 'S'),
+					),
+					block(
+						'SetAddonActive',
+						'C',
+						'アドオンID [ID] のアドオンの有効化を [Active] にする',
+						args(arg('ID', 'S'), arg('Active', 'N', '0')),
+					),
+					block('GetAddonLength', 'R', '外部アドオンの数'),
+					block(
+						'GetAddonData',
+						'R',
+						'[Pos] 番目の外部アドオンの [Type]',
+						args(arg('Pos', 'N', '1'), arg('Type', 'S', 'id')),
 					),
 					label('OPTION関係'),
-					block('DoOption', 'B', '保存された設定がある'),
-					block('SaveOption', 'C', '設定を保存'),
-					block('LoadOption', 'C', '設定を読み込み'),
+					block('SaveOption', 'C', 'REOPTIONを保存'),
+					block(
+						'SetNYADDONOption',
+						'C',
+						'アドオン [ID] のスペース [Space] のキー [Key] の値を [Value] にする',
+						args(
+							arg('ID', 'S'),
+							arg('Space', 'S'),
+							arg('Key', 'S'),
+							arg('Value', 'S'),
+						),
+					),
+					block(
+						'GetNYADDONOptionValue',
+						'R',
+						'アドオン [ID] のスペース [Space] のキー [Key] の値',
+						args(
+							arg('ID', 'S'),
+							arg('Space', 'S'),
+							arg('Key', 'S'),
+						),
+					),
+					block(
+						'GetNYADDONOptionData',
+						'R',
+						'アドオン [ID] のスペース [Space] のキー [Key] の要素 [Type]',
+						args(
+							arg('ID', 'S'),
+							arg('Space', 'S'),
+							arg('Key', 'S'),
+							arg('Type', 'S'),
+						),
+					),
+					block(
+						'GetNYADDONOptionList',
+						'R',
+						'アドオン [ID] のスペース [Space] のキー [Key] のリストの [POS] 番目',
+						args(
+							arg('ID', 'S'),
+							arg('Space', 'S'),
+							arg('Key', 'S'),
+							arg('POS', 'N'),
+						),
+					),
+					block(
+						'GetNYADDONOptionlength',
+						'R',
+						'アドオン [ID] のスペース [Space] のキー [Key] の要素 [Type] の書いている所までの長さ',
+						args(
+							arg('ID', 'S'),
+							arg('Space', 'S'),
+							arg('Key', 'S'),
+							arg('Type', 'S'),
+						),
+					),
+					block(
+						'GetNYADDONOptionPos',
+						'R',
+						'アドオン [ID] のスペース [Space] のキー [Key] の書いている所までの [POS] 番目のキー',
+						args(
+							arg('ID', 'S'),
+							arg('Space', 'S'),
+							arg('Key', 'S'),
+							arg('POS', 'N'),
+						),
+					),
+					label('スコア'),
+					block(
+						'GChartID',
+						'R',
+						'曲名 [MusID] と難易度 [DifID] で譜面IDを生成',
+						args(
+							arg('MusID', 'S', 'ライアーダンサー'),
+							arg('DifID', 'S', 'hard'),
+						),
+					),
+					block(
+						'GetHscore',
+						'R',
+						'譜面ID [ChaID] のハイスコア',
+						arg('ChaID', 's', 'ライアーダンサー_hard'),
+					),
+					block(
+						'UpdateHscore',
+						'C',
+						'譜面ID [ChaID] のハイスコアを [Score] で更新',
+						args(
+							arg('ChaID', 'S', 'ライアーダンサー_hard'),
+							arg('Score', 'N', '1000000'),
+						),
+					),
+					block(
+						'GetRank',
+						'R',
+						'スコア [Score] をランクに変換',
+						arg('Score', 'N', '1000000'),
+					),
 					label('mainスプライト'),
 					block(
 						'GAMEor',
@@ -108,19 +334,21 @@
 						'GAME. [main] [sub]',
 						args(
 							arg('main', 's', 'menu'),
-							arg('sub', 's', 'senkyoku_wait_choice')
-						)
+							arg('sub', 's', 'senkyoku_wait_choice'),
+						),
 					),
+					block('NABP', 'R', 'NYADDONボタンx座標'),
+					block('PLA_UI_Col', 'R', 'PLAYER.UI.Color'),
 					block(
 						'mainVarList',
 						'R',
-						'mainスプライトのすべてのローカル変数'
+						'mainスプライトのすべてのローカル変数',
 					),
 					block(
 						'mainVarGet',
 						'R',
 						'mainスプライトのローカル変数 [VarID]',
-						arg('VarID', 'S', 'GAME.main')
+						arg('VarID', 'S', 'GAME.main'),
 					),
 					block(
 						'mainVarSet',
@@ -128,19 +356,19 @@
 						'mainスプライトのローカル変数 [VarID] を [Value] にする',
 						args(
 							arg('VarID', 'S', 'GAME.main'),
-							arg('Value', 'S', 'menu')
-						)
+							arg('Value', 'S', 'menu'),
+						),
 					),
 					block(
 						'mainListList',
 						'R',
-						'mainスプライトのすべてのローカルリスト'
+						'mainスプライトのすべてのローカルリスト',
 					),
 					block(
 						'mainListGet',
 						'R',
 						'mainスプライトのローカルリスト [VarID] のArray',
-						arg('VarID', 'S', 'UI.button')
+						arg('VarID', 'S', 'UI.button'),
 					),
 					block(
 						'mainListSet',
@@ -148,22 +376,87 @@
 						'mainスプライトのローカルリスト [VarID] を [Value] で置き換え',
 						args(
 							arg('VarID', 'S', 'UI.button'),
-							arg('Value', 'S', '["りんご", "ごりら", "らっぱ"]')
-						)
+							arg('Value', 'S', '["りんご", "ごりら", "らっぱ"]'),
+						),
+					),
+					block(
+						'showPrompt',
+						'R',
+						'[PROMPT] と聞く',
+						arg('PROMPT', 'S', '猫は好きですか?'),
 					),
 					label('NDT'),
 					block('NDTVer', 'R', 'NDTのバージョン'),
 					block('NDTMessage', 'R', 'NDTの更新内容'),
+					block(
+						'Upload',
+						'R',
+						'[TYPE] のアップロードを求める',
+						arg('TYPE', 'S', '.naddon'),
+					),
+					block(
+						'LoadImage',
+						'C',
+						'スプライト [SPRITE] にURL [URL] から画像を読み込んで [ID] として保存',
+						args(
+							arg('SPRITE', 'S', 'main'),
+							arg(
+								'URL',
+								'S',
+								'https://trampoline.turbowarp.org/avatars/95456441',
+							),
+							arg('ID', 'S', 'cstore.user.95456441'),
+						),
+					),
+					block(
+						'isCostumeLoaded',
+						'B',
+						'スプライト [SPRITE] が画像 [ID] を読み込み済み',
+						args(
+							arg('SPRITE', 'S', 'main'),
+							arg('ID', 'S', 'cstore.user.95456441'),
+						),
+					),
+					block(
+						'CostumeSize',
+						'R',
+						'スプライト [SPRITE] の画像 [ID] の横幅',
+						args(
+							arg('SPRITE', 'S', 'main'),
+							arg('ID', 'S', 'cstore.user.95456441'),
+						),
+					),
 					label('その他'),
+					block(
+						'PressSCKey',
+						'C',
+						'[KEY] を1STEP押す',
+						arg('KEY', 'S', 'd'),
+					),
+					block(
+						'isTouching',
+						'B',
+						'スプライトにいずれかの手が触れている',
+					),
 					block(
 						'StartsW',
 						'R',
 						'[JSON] の中で [TEXT] から始まるすべての要素',
 						args(
 							arg('JSON', 'S', '["りんご", "ごりら", "らっぱ"]'),
-							arg('TEXT', 'S', 'ご')
-						)
-					)
+							arg('TEXT', 'S', 'ご'),
+						),
+					),
+					block(
+						'tTot',
+						'R',
+						'[TEXT] の [F] 文字目から [T] 文字目までの文',
+						args(
+							arg('TEXT', 'S', 'ねこです'),
+							arg('F', 'N', '2'),
+							arg('T', 'N', '3'),
+						),
+					),
 				),
 				{
 					menuIconURI:
@@ -173,18 +466,43 @@
 					color1: '#ffad87',
 					color2: '#ff9c6e',
 					color3: '#ff8a54',
-				}
+				},
 			);
 		}
 
 		// ブロックの定義
 		// システム
 		Reload() {
-			NDT.Eve.Flag();
+			_Reload();
+		}
+		Setup() {
+			if (Setup) return;
+
+			NDT.NEve.Dispatch('NYADDON_SETUP');
+			NDT.Eve.Stop();
+		}
+		// 仮変数
+		Var_Get(args) {
+			return Var[args.VarID];
+		}
+		Var_Set(args) {
+			Var[args.VarID] = args.Value;
+		}
+		Var_Change(args) {
+			if (isNaN(Var[args.VarID])) {
+				Var[args.VarID] = 0;
+			}
+			if (!isNaN(args.Value)) {
+				Var[args.VarID] = Number(Var[args.VarID]) + Number(args.Value);
+			}
 		}
 		// 譜面
 		GetAllChart() {
 			return _AllChart();
+		}
+		GetChartFrom(args) {
+			if (!Object.keys(ChartUser).includes(args.ChaID)) return 'ZVA6';
+			return ChartUser[args.ChaID];
 		}
 		DeleteAllChart() {
 			for (const now of NDT.Spr.Ast.Sou.IDList('MUSIC')) {
@@ -193,7 +511,7 @@
 				}
 				if (Mods.filter((m) => m.chart == now).length > 0) {
 					NDT.Spr.Delete(
-						Mods.filter((m) => m.chart == now)[0].sprite
+						Mods.filter((m) => m.chart == now)[0].sprite,
 					);
 				}
 			}
@@ -225,18 +543,133 @@
 		async ImportFromZIP(args) {
 			await _ImportChart('ZIP', args.URL);
 		}
+		async SetCStore(args) {
+			ChartStore.length = 0;
+			const List = [];
+			const Del = [1156261781, 388537072];
+			let P = 0;
+			while (true) {
+				const res = await fetch(
+					`https://trampoline.turbowarp.org/api/studios/${args.ID}/projects?limit=40&offset=${P * 40}`,
+				);
+				const data = await res.json();
+				for (const now of data) {
+					if (Del.includes(now.id)) continue;
+					const Cha = {};
+					Cha.id = now.id;
+					Cha.title = now.title
+						.replaceAll('音ゲー', '')
+						.replaceAll('：', '')
+						.replaceAll('ZERONEIII', '')
+						.replaceAll('ReLASER', '')
+						.replaceAll('[]', '')
+						.trim();
+					Cha.user = now.username;
+					Cha.PJImage = `https://trampoline.turbowarp.org/thumbnails/${now.id}?width=240&height=180`;
+					Cha.USERImage = `https://trampoline.turbowarp.org/avatars/${now.creator_id}?width=32&height=32`;
+					List.push(Cha);
+				}
+				if (data.length < 40) {
+					ChartStore.push(...List);
+					return;
+				}
+				P += 1;
+			}
+		}
+		isCStoreLoaded() {
+			return ChartStore.length > 0;
+		}
+		CStorelength() {
+			return ChartStore.length;
+		}
+		GetCStoreChart(args) {
+			return String(ChartStore[args.POS - 1]?.[args.TYPE]);
+		}
 		// Mod
 		GetAllMod() {
 			return JSON.stringify(Mods);
 		}
 		// 外部アドオン
+		async InstallAddon(args) {
+			const MFest = await _InstallAddon(args.URL);
+			if (Addons.filter((a) => a.id == MFest.id).length > 0) {
+				const Index = Addons.findIndex((a) => a.id == MFest.id);
+				Addons.splice(Index, 1);
+			}
+			MFest.active = true;
+			Addons.push(MFest);
+			await NS.Set(`re_addon_${MFest.id}`, args.URL);
+			localStorage.setItem('re_addon', JSON.stringify(Addons));
+			if (!MFest.reload) NDT.Spr.Eve.Flag(AddonSprite[MFest.id]);
+		}
+		async UninstallAddon(args) {
+			_UninstallAddon(args.ID);
+			const Index = Addons.findIndex((a) => a.id == args.ID);
+			Addons.splice(Index, 1);
+			await NS.Delete(`re_addon_${args.ID}`);
+			localStorage.setItem('re_addon', JSON.stringify(Addons));
+		}
+		async SetAddonActive(args) {
+			const AD = Addons.filter((a) => a.id == args.ID)[0];
+			if (!AD || AD.active == (args.Active == 1)) return;
+			if (args.Active == 1) {
+				AD.active = true;
+				const ADURL = await NS.Get(`re_addon_${AD.id}`);
+				await _InstallAddon(ADURL);
+			} else {
+				AD.active = false;
+				await _UninstallAddon(AD.id);
+			}
+			localStorage.setItem('re_addon', JSON.stringify(Addons));
+		}
+		GetAddonLength() {
+			return Addons.length;
+		}
+		GetAddonData(args) {
+			return String(Addons[args.Pos - 1][args.Type]);
+		}
 
+		// スコア
+		GChartID(args) {
+			return `${args.MusID}_${args.DifID}`;
+		}
+		GetHscore(args) {
+			if (!HScore[args.ChaID]) return 0;
+			return Number(HScore[args.ChaID]);
+		}
+		UpdateHscore(args) {
+			if (!HScore[args.ChaID] > args.Score) return;
+			HScore[args.ChaID] = args.Score;
+			localStorage.setItem('re_score', JSON.stringify(HScore));
+		}
+		GetRank(args) {
+			return _getRank(args.Score);
+		}
 		// Mainスプライト
 		GAMEor(args) {
 			return (
-				NDT.Var.Get('GAME.main') == args.main &&
-				NDT.Var.Get('GAME.sub') == args.sub
+				(args.main == '' || NDT.Var.Get('GAME.main') == args.main) &&
+				(args.sub == '' || NDT.Var.Get('GAME.sub') == args.sub)
 			);
+		}
+		NABP() {
+			const TIME = NDT.Spr.Var.Get('main', 'TIME.game.sub');
+			const SUB = NDT.Var.Get('GAME.sub');
+			let r1 = -160;
+			if (SUB == 'nanido_init_fromplayer') {
+				const r2 = 0.6 - TIME;
+				r1 = r1 - r2 * r2 * 400;
+			} else if (SUB == 'nanido_out') {
+				r1 = r1 - TIME * TIME * 400;
+			}
+			return r1;
+		}
+		PLA_UI_Col() {
+			if (NDT.Spr.Var.Get('main', '@IMG.blackOrWhite') == 'black') {
+				return '#ffffff';
+			} else {
+				return '#000000';
+			}
 		}
 		mainVarList() {
 			return JSON.stringify(NDT.Spr.Var.NameList('main'));
@@ -259,25 +692,61 @@
 			List.push(...JSON.parse(args.Value));
 		}
 		// 設定
-		DoOption() {
-			return localStorage.getItem('re-save') !== null;
-		}
 		SaveOption() {
 			const Options = NDT.Spr.Var.NameList('main').filter((v) =>
-				v.startsWith('OPTION')
+				v.startsWith('OPTION'),
 			);
 			const Data = Object.fromEntries(
-				Options.map((v) => [v, NDT.Spr.Var.Get('main', v)])
+				Options.map((v) => [v, NDT.Spr.Var.Get('main', v)]),
 			);
-			localStorage.setItem('re-save', JSON.stringify(Data));
+			localStorage.setItem('re_option', JSON.stringify(Data));
 		}
-		LoadOption() {
-			if (!localStorage.getItem('re-save')) return;
-
-			const Data = JSON.parse(localStorage.getItem('re-save'));
-			for (const op of Object.entries(Data)) {
-				NDT.Spr.Var.Set('main', op[0], op[1]);
+		SetNYADDONOption(args) {
+			if (!AddonOption[args.ID]?.[args.Space]?.[args.Key]) return;
+			_SetOption(args.ID, args.Space, args.Key, args.Value);
+		}
+		GetNYADDONOptionData(args) {
+			if (!AddonOption[args.ID]?.[args.Space]?.[args.Key]) return;
+			return String(
+				AddonOption[args.ID][args.Space][args.Key][args.Type],
+			);
+		}
+		GetNYADDONOptionValue(args) {
+			if (!AddonOption[args.ID]?.[args.Space]?.[args.Key]) return;
+			if (
+				AddonOption[args.ID]?.[args.Space]?.[args.Key].hasOwnProperty(
+					'value',
+				)
+			) {
+				return String(
+					AddonOption[args.ID]?.[args.Space]?.[args.Key].value,
+				);
 			}
+			return String(AddonOption[args.ID][args.Space][args.Key].default);
+		}
+		GetNYADDONOptionList(args) {
+			if (!AddonOption[args.ID]?.[args.Space]?.[args.Key]) return;
+			return String(
+				AddonOption[args.ID][args.Space][args.Key].list[args.POS - 1],
+			);
+		}
+		GetNYADDONOptionlength(args) {
+			let out = AddonOption;
+			if (args.ID !== '') out = out[args.ID];
+			if (args.Space !== '') out = out[args.Space];
+			if (args.Key !== '') out = out[args.Key];
+			if (args.Type !== '') out = out[args.Type];
+			return String(Object.keys(out).length);
+		}
+		GetNYADDONOptionPos(args) {
+			let out = AddonOption;
+			if (args.ID !== '') out = out[args.ID];
+			if (args.Space !== '') out = out[args.Space];
+			if (args.Key !== '') out = out[args.Key];
+			return String(Object.keys(out)[args.POS - 1]);
+		}
+		showPrompt(args) {
+			return String(window.prompt(args.PROMPT));
 		}
 		// NDT
 		NDTVer() {
@@ -286,15 +755,97 @@
 		NDTMessage() {
 			return NDT.Info.Message;
 		}
+		async Upload(args) {
+			return await NDT.Upload(args.TYPE);
+		}
+		async LoadImage(args) {
+			await NDT.Spr.Ast.Cos.Add(args.SPRITE, args.ID, args.URL);
+		}
+		isCostumeLoaded(args) {
+			return NDT.Spr.Ast.Cos.NameList(args.SPRITE).includes(args.ID);
+		}
+		CostumeSize(args) {
+			return NDT.VM.renderer.getSkinSize(
+				NDT.Spr.Ast.Cos.Get(args.SPRITE, args.ID).skinId,
+			)[0];
+		}
 		// その他
+		PressSCKey(args) {
+			PressKeys.push(args.KEY);
+		}
+		isTouching(args, util) {
+			return _isTouching(util.target);
+		}
 		StartsW(args) {
 			return JSON.stringify(
-				JSON.parse(args.JSON).filter((v) => v.startsWith(args.TEXT))
+				JSON.parse(args.JSON).filter((v) => v.startsWith(args.TEXT)),
 			);
+		}
+		tTot(args) {
+			return String(args.TEXT.slice(args.F - 1, args.T));
 		}
 	}
 
 	// ブロック用関数
+	async function _Setup() {
+		if (Setup || !NDT.Spr.NameList.includes('main')) return;
+		Setup = true;
+		if (
+			localStorage.getItem(
+				'extensions.turbowarp.org/local-storage:Na_ZeroneIII',
+			) !== null
+		) {
+			localStorage.setItem(
+				're_score',
+				JSON.parse(
+					localStorage.getItem(
+						'extensions.turbowarp.org/local-storage:Na_ZeroneIII',
+					),
+				).data.score,
+			);
+			localStorage.removeItem(
+				'extensions.turbowarp.org/local-storage:Na_ZeroneIII',
+			);
+			const List = await NS.DataList();
+			for (const now of List) {
+				await NS.Delete(now);
+			}
+		}
+		if (localStorage.getItem('re-save') !== null) {
+			localStorage.setItem('re_option', localStorage.getItem('re-save'));
+			localStorage.removeItem('re-save');
+		}
+		const OP = JSON.parse(localStorage.getItem('re_option'));
+		const HS = JSON.parse(localStorage.getItem('re_score'));
+		const AD = JSON.parse(localStorage.getItem('re_addon'));
+		const ADOPT = JSON.parse(localStorage.getItem('re_addon_option'));
+		if (OP) {
+			for (const [k, v] of Object.entries(OP)) {
+				if (!NDT.Spr.Var.NameList('main').includes(k)) {
+					NDT.Spr.Var.Create('main', k);
+				}
+				NDT.Spr.Var.Set('main', k, v);
+			}
+		}
+		if (HS) {
+			for (const [k, v] of Object.entries(HS)) {
+				HScore[k] = v;
+			}
+		}
+		if (ADOPT) {
+			for (const [k, v] of Object.entries(ADOPT)) {
+				AddonOption[k] = v;
+			}
+		}
+		if (AD) {
+			for (const now of AD) {
+				Addons.push(now);
+				if (!now.active) continue;
+				const ADURL = await NS.Get(`re_addon_${now.id}`);
+				const AD = await _InstallAddon(ADURL);
+			}
+		}
+	}
 	function _AllChart() {
 		return _ChartData()
 			.filter((c) => c.startsWith('#'))
@@ -303,31 +854,28 @@
 	function _ChartData() {
 		return NDT.List.Get('譜面データ/charts');
 	}
-	function _toDataURL(DATA) {
-		return `data:application/octet-stream;base64,${DATA.toBase64()}`;
+	function _Reload() {
+		NDT.Eve.Flag();
 	}
-	async function _InstallAddon(URL) {
-		const res = await fetch(URL);
-		const data = await res.arrayBuffer();
-		const U8A = new Uint8Array(data);
-		const SPZip = fflate.unzipSync(U8A);
-		const SP = JSON.parse(fflate.strFromU8(SPZip['sprite.json']));
-
-		const CMT = Object.values(SP.comments).map((c) => c.text);
-		if (!CMT.filter((c) => c.includes('@manifest')).length > 0) {
-			console.error(
-				`読み込まれたスプライトは対応した形式ではありません!`
-			);
-			return;
+	// ランク取得
+	function _getRank(Score) {
+		const List = {
+			aj: 1000000,
+			ex: 990000,
+			ss: 980000,
+			s: 960000,
+			a: 940000,
+			b: 900000,
+			c: 800000,
+			f: 0,
+		};
+		for (const [k, v] of Object.entries(List)) {
+			if (v <= Score) return k;
 		}
-		const mfest = JSON.parse(
-			CMT.filter((c) => c.includes('@manifest'))[0].replace(
-				'@manifest',
-				''
-			)
-		);
-		if (!mfest.runner || mfest.runner == 'OLD_SPRITE') {
-		}
+		return unknown;
+	}
+	function _toDataURL(U8A) {
+		return `data:application/octet-stream;base64,${U8A.toBase64()}`;
 	}
 	// 譜面をインポートする関数
 	async function _ImportChart(MODE = 'sc', SRC) {
@@ -339,22 +887,24 @@
 		}
 
 		const Mode = MODE.toLowerCase();
-		let PJ;
+		let PJ, Author;
 		if (Mode == 'sc') {
 			const resData = await fetch(
-				`https://trampoline.turbowarp.org/api/projects/${SRC}`
+				`https://trampoline.turbowarp.org/api/projects/${SRC}`,
 			);
 			const PJData = await resData.json();
 			const res = await fetch(
-				`https://projects.scratch.mit.edu/${SRC}?token=${PJData.project_token}`
+				`https://projects.scratch.mit.edu/${SRC}?token=${PJData.project_token}`,
 			);
 			PJ = await res.json();
+			Author = PJData.author.username;
 		} else if (Mode == 'zip') {
 			const res = await fetch(SRC);
 			const data = await res.arrayBuffer();
 			const U8A = new Uint8Array(data);
 			const PJZip = fflate.unzipSync(U8A);
 			PJ = JSON.parse(fflate.strFromU8(PJZip['project.json']));
+			Author = 'unknown';
 		}
 
 		const targets = PJ.targets;
@@ -365,7 +915,7 @@
 		const is_old = Object.keys(getVar(main)).includes('Editor-TIM');
 
 		const chartsAll = Object.keys(getList(stage)).includes(
-			'譜面データ/charts'
+			'譜面データ/charts',
 		)
 			? getList(stage)['譜面データ/charts']
 			: getList(main).songsdata;
@@ -387,19 +937,20 @@
 				const name = spl[0].slice(1);
 				skip = LCcharts.includes(now);
 				title = name;
-				if (
-					!(skip || NDT.Spr.Ast.Sou.NameList('MUSIC').includes(now))
-				) {
-					let url;
-					if (
-						Mode == 'zip' &&
-						Object.keys(PJZip).includes(sounds[name])
-					) {
-						url = _toDataURL(PJZip[sounds[name]]);
-					} else {
-						url = `https://assets.scratch.mit.edu/internalapi/asset/${sounds[name]}/get`;
+				if (!skip) {
+					ChartUser[title] = Author;
+					if (!NDT.Spr.Ast.Sou.NameList('MUSIC').includes(now)) {
+						let url;
+						if (
+							Mode == 'zip' &&
+							Object.keys(PJZip).includes(sounds[name])
+						) {
+							url = _toDataURL(PJZip[sounds[name]]);
+						} else {
+							url = `https://assets.scratch.mit.edu/internalapi/asset/${sounds[name]}/get`;
+						}
+						await NDT.Spr.Ast.Sou.Add('MUSIC', name, url);
 					}
-					await NDT.Spr.Ast.Sou.Add('MUSIC', name, url);
 				}
 			}
 			if (!skip) {
@@ -427,9 +978,7 @@
 				} else {
 					url = `https://assets.scratch.mit.edu/internalapi/asset/${now.md5ext}/get`;
 				}
-				if (is_old) {
-					url = await resizeImage(url);
-				}
+				url = await _resizeImage(url);
 				await NDT.Spr.Ast.Cos.Add('main', now.name, url);
 			}
 		}
@@ -483,14 +1032,64 @@
 					_toDataURL(
 						fflate.zipSync(SPZip, {
 							level: 0,
-						})
-					)
+						}),
+					),
 				);
 			}
 		}
 	}
+	// アドオンをインストールする関数
+	async function _InstallAddon(url) {
+		const res = await fetch(url);
+		const data = await res.arrayBuffer();
+		const AD = new Uint8Array(data);
+		const ADZip = fflate.unzipSync(AD);
+		const MFest = JSON.parse(fflate.strFromU8(ADZip['manifest.json']));
+		const SPURL = _toDataURL(ADZip['sprite.sprite3']);
+		if (Object.keys(AddonSprite).includes(MFest.id)) {
+			if (
+				MFest.version ==
+				NDT.Spr.Get(AddonSprite[MFest.id]).mfest.version
+			)
+				return MFest;
+			NDT.Spr.Delete(AddonSprite[MFest.id]);
+		}
+
+		const target = await NDT.Spr.Add(SPURL);
+		AddonSprite[MFest.id] = target.id;
+		const render = Object.values(target.blocks._blocks).filter(
+			(b) =>
+				b.opcode == 'event_whenbroadcastreceived' &&
+				b.fields.BROADCAST_OPTION.value == 'RENDER',
+		)[0];
+		if (render) {
+			MFest.reload = true;
+		}
+		target.mfest = MFest;
+		return MFest;
+	}
+	function _UninstallAddon(id) {
+		if (
+			!(
+				Object.keys(AddonSprite).includes(id) &&
+				NDT.Spr.IDList.includes(AddonSprite[id])
+			)
+		)
+			return;
+		NDT.Spr.Delete(AddonSprite[id]);
+		delete AddonSprite[id];
+	}
+	function _SetOption(id, space, key, value) {
+		AddonOption[id][space][key].value = value;
+		localStorage.setItem('re_addon_option', JSON.stringify(AddonOption));
+	}
 	// リサイズ
-	async function resizeImage(url, maxWidth = 6, maxHeight = 6, sharp = true) {
+	async function _resizeImage(
+		url,
+		maxWidth = 6,
+		maxHeight = 6,
+		sharp = true,
+	) {
 		return new Promise((resolve, reject) => {
 			const img = new Image();
 			img.crossOrigin = 'anonymous';
@@ -502,7 +1101,7 @@
 				if (width > maxWidth || height > maxHeight) {
 					const scale = Math.min(
 						maxWidth / width,
-						maxHeight / height
+						maxHeight / height,
 					);
 					width = Math.round(width * scale);
 					height = Math.round(height * scale);
@@ -549,7 +1148,7 @@
 		if (typeof data !== type) {
 			log(
 				'e',
-				`引数に指定できない型が指定されています!: 入力=>${typeof data} 要求=>${type}`
+				`引数に指定できない型が指定されています!: 入力=>${typeof data} 要求=>${type}`,
 			);
 		}
 	}
@@ -583,7 +1182,7 @@
 			'REPORTER',
 			'BOOLEAN',
 			'HAT',
-			'EVENT'
+			'EVENT',
 		);
 
 		// argsの確認
@@ -594,7 +1193,7 @@
 			if (!allinputargs.includes(chk)) {
 				log(
 					'w',
-					`block"${opcode}"に必要なargが渡されていません: ${chk}`
+					`block"${opcode}"に必要なargが渡されていません: ${chk}`,
 				);
 			}
 		}
@@ -602,7 +1201,7 @@
 			if (!allblockargs.includes(chk)) {
 				log(
 					'w',
-					`block"${opcode}"に不必要なargが渡されています: ${chk}`
+					`block"${opcode}"に不必要なargが渡されています: ${chk}`,
 				);
 			}
 		}
@@ -630,7 +1229,7 @@
 			'MATRIX',
 			'NOTE',
 			'IMAGE',
-			'COLOR'
+			'COLOR',
 		);
 		return {
 			[id]: {
@@ -761,8 +1360,74 @@
 		};
 		return { Set, Get, Delete, DataList };
 	})();
-
-	// セットアップを実行してから拡張機能を認証
+	// 下の関数がNDTを要求するのでこのタイミングでセットアップ
 	await Extension_Setup();
+	// タップ検出
+	const _isTouching = (function () {
+		if (!(navigator.maxTouchPoints > 0 || 'ontouchstart' in window)) {
+			return () => false;
+		}
+
+		const vm = NDT.VM;
+		if (!vm?.runtime?.renderer?.canvas) return () => false;
+
+		const canvas = vm.runtime.renderer.canvas;
+		const fingers = new Map(); // Scratch ID → {x, y}
+		const nativeToScratch = new Map(); // native identifier → Scratch ID
+
+		const nextId = () => {
+			let id = 1;
+			while (fingers.has(id)) id++;
+			return id;
+		};
+
+		const updatePos = (touch, rect) => ({
+			x: touch.clientX - rect.left,
+			y: touch.clientY - rect.top,
+		});
+
+		const handleStart = (e) => {
+			e.preventDefault();
+			const rect = canvas.getBoundingClientRect();
+			for (const t of e.changedTouches) {
+				const id = nextId();
+				nativeToScratch.set(t.identifier, id);
+				fingers.set(id, updatePos(t, rect));
+			}
+		};
+
+		const handleMove = (e) => {
+			e.preventDefault();
+			const rect = canvas.getBoundingClientRect();
+			for (const t of e.changedTouches) {
+				const id = nativeToScratch.get(t.identifier);
+				if (id) fingers.set(id, updatePos(t, rect));
+			}
+		};
+
+		const handleEnd = (e) => {
+			e.preventDefault();
+			for (const t of e.changedTouches) {
+				const id = nativeToScratch.get(t.identifier);
+				if (id) {
+					fingers.delete(id);
+					nativeToScratch.delete(t.identifier);
+				}
+			}
+		};
+
+		canvas.addEventListener('touchstart', handleStart, { passive: false });
+		canvas.addEventListener('touchmove', handleMove, { passive: false });
+		canvas.addEventListener('touchend', handleEnd, { passive: false });
+		canvas.addEventListener('touchcancel', handleEnd, { passive: false });
+
+		return (target) => {
+			if (!target?.isTouchingPoint) return false;
+			for (const { x, y } of fingers.values()) {
+				if (target.isTouchingPoint(x, y)) return true;
+			}
+			return false;
+		};
+	})();
 	Scratch.extensions.register(new ReLaserExt());
 })(Scratch);
