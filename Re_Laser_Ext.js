@@ -11,19 +11,19 @@
 		NYADDON: {
 			System: {
 				ID: {
-					text: 'Username',
+					text: 'ユーザーめい',
 					type: 'input',
 					default: 'Guest',
 				},
 			},
 			Touch: {
 				isActive: {
-					text: 'NyankoTouch',
+					text: 'タップそうさ',
 					type: 'boolean',
 					default: false,
 				},
 				Type: {
-					text: 'Types of Boxes',
+					text: 'タイプ',
 					type: 'list',
 					list: ['1', '2'],
 					default: '1',
@@ -75,9 +75,6 @@
 
 		await loadNDT();
 		await loadfflate();
-		if (NDT.Spr.NameList.includes('main')) {
-			await _Setup();
-		}
 
 		NDT.NEve.Add('FLAG_BEFORE', () => {
 			if (!Loaded) return;
@@ -426,6 +423,16 @@
 							arg('ID', 'S', 'cstore.user.95456441'),
 						),
 					),
+
+					block(
+						'CostumeURL',
+						'R',
+						'スプライト [SPRITE] の画像 [ID] のURLを取得',
+						args(
+							arg('SPRITE', 'S', 'main'),
+							arg('ID', 'S', 'cstore.user.95456441'),
+						),
+					),
 					label('その他'),
 					block(
 						'PressSCKey',
@@ -713,16 +720,24 @@
 		}
 		GetNYADDONOptionValue(args) {
 			if (!AddonOption[args.ID]?.[args.Space]?.[args.Key]) return;
+			let v;
 			if (
 				AddonOption[args.ID]?.[args.Space]?.[args.Key].hasOwnProperty(
 					'value',
 				)
 			) {
+				v = AddonOption[args.ID]?.[args.Space]?.[args.Key].value;
+			} else {
+				v = AddonOption[args.ID][args.Space][args.Key].default;
+			}
+			if (AddonOption[args.ID]?.[args.Space]?.[args.Key].type == 'list') {
 				return String(
-					AddonOption[args.ID]?.[args.Space]?.[args.Key].value,
+					AddonOption[args.ID]?.[args.Space]?.[args.Key].list[
+						Number(v) - 1
+					],
 				);
 			}
-			return String(AddonOption[args.ID][args.Space][args.Key].default);
+			return String(v);
 		}
 		GetNYADDONOptionList(args) {
 			if (!AddonOption[args.ID]?.[args.Space]?.[args.Key]) return;
@@ -768,6 +783,9 @@
 			return NDT.VM.renderer.getSkinSize(
 				NDT.Spr.Ast.Cos.Get(args.SPRITE, args.ID).skinId,
 			)[0];
+		}
+		CostumeURL(args) {
+			return NDT.Spr.Ast.Cos.Export(args.SPRITE, args.ID);
 		}
 		// その他
 		PressSCKey(args) {
@@ -1080,14 +1098,41 @@
 		delete AddonSprite[id];
 	}
 	function _SetOption(id, space, key, value) {
-		AddonOption[id][space][key].value = value;
+		if (
+			(value == 'up' || value == 'down') &&
+			AddonOption[id][space][key].type == 'list'
+		) {
+			if (!AddonOption[id][space][key].hasOwnProperty('value'))
+				AddonOption[id][space][key].value =
+					AddonOption[id][space][key].default;
+			if (value == 'down') {
+				AddonOption[id][space][key].value =
+					Number(AddonOption[id][space][key].value) - 1;
+				if (
+					AddonOption[id][space][key].list.length >
+					AddonOption[id][space][key].value
+				)
+					AddonOption[id][space][key].value =
+						AddonOption[id][space][key].list.length;
+			} else {
+				AddonOption[id][space][key].value =
+					Number(AddonOption[id][space][key].value) + 1;
+				if (
+					AddonOption[id][space][key].list.length <
+					AddonOption[id][space][key].value
+				)
+					AddonOption[id][space][key].value = 1;
+			}
+		} else {
+			AddonOption[id][space][key].value = value;
+		}
 		localStorage.setItem('re_addon_option', JSON.stringify(AddonOption));
 	}
 	// リサイズ
 	async function _resizeImage(
 		url,
-		maxWidth = 6,
-		maxHeight = 6,
+		maxWidth = 7,
+		maxHeight = 7,
 		sharp = true,
 	) {
 		return new Promise((resolve, reject) => {
