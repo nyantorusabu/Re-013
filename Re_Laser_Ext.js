@@ -1108,10 +1108,7 @@
 			if (value == 'down') {
 				AddonOption[id][space][key].value =
 					Number(AddonOption[id][space][key].value) - 1;
-				if (
-					AddonOption[id][space][key].list.length >
-					AddonOption[id][space][key].value
-				)
+				if (1 > AddonOption[id][space][key].value)
 					AddonOption[id][space][key].value =
 						AddonOption[id][space][key].list.length;
 			} else {
