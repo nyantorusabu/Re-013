@@ -335,7 +335,12 @@
 						),
 					),
 					block('NABP', 'R', 'NYADDONボタンx座標'),
-					block('Dif_X', 'R', '難易度のx座標'),
+					block(
+						'Dif_X',
+						'R',
+						'難易度の [POS] 番目のx座標',
+						arg('POS', 'N', '1'),
+					),
 					block(
 						'Dif_Y',
 						'R',
@@ -694,14 +699,22 @@
 			}
 			return r1;
 		}
-		Dif_X() {
+		Dif_X(args) {
 			const TIME = NDT.Spr.Var.Get('main', 'TIME.game.sub');
 			const SUB = NDT.Var.Get('GAME.sub');
 			let r1 = -5;
-			if (SUB == 'nanido_init') {
+			if (SUB == 'nanido_init' || SUB == 'nanido_init_fromplayer') {
 				r1 = r1 + (0.6 - TIME) * (0.6 - TIME) * 1000;
-			} else if (SUB == 'nanido_out_tosenkyoku') {
-				r1 = r1 + TIME * TIME * 2000;
+			} else if (SUB == 'nanido_out' || SUB == 'nanido_out_tosenkyoku') {
+				if (
+					SUB == 'nanido_out_tosenkyoku' ||
+					Number(NDT.Spr.Var.Get('main', 'MENU.choiceID')) !==
+						Number(args.POS)
+				) {
+					r1 = r1 + TIME * TIME * 2000;
+				} else {
+					r1 = r1 + (TIME - 0.15) * (TIME - 0.15) * 2000;
+				}
 			}
 			return r1;
 		}
