@@ -335,6 +335,18 @@
 						),
 					),
 					block('NABP', 'R', 'NYADDONボタンx座標'),
+					block(
+						'Dif_Y',
+						'R',
+						'難易度の [POS] 番目のy座標',
+						arg('POS', 'N', '1'),
+					),
+					block(
+						'Dif_ID',
+						'R',
+						'難易度の [POS] 番目の難易度名',
+						arg('POS', 'N', '1'),
+					),
 					block('PLA_UI_Col', 'R', 'PLAYER.UI.Color'),
 					block(
 						'mainVarList',
@@ -567,7 +579,10 @@
 					Cha.title = now.title
 						.replaceAll('音ゲー', '')
 						.replaceAll('：', '')
+						.replaceAll(':', '::')
 						.replaceAll('ZERONEIII', '')
+						.replaceAll('ZERONEⅢ', '')
+						.replaceAll('ZERONE', '')
 						.replaceAll('ReLASER', '')
 						.replaceAll('[]', '')
 						.trim();
@@ -662,7 +677,7 @@
 		NABP() {
 			const TIME = NDT.Spr.Var.Get('main', 'TIME.game.sub');
 			const SUB = NDT.Var.Get('GAME.sub');
-			let r1 = -160;
+			let r1 = -187;
 			if (SUB == 'nanido_init_fromplayer') {
 				const r2 = 0.6 - TIME;
 				r1 = r1 - r2 * r2 * 400;
@@ -670,6 +685,20 @@
 				r1 = r1 - TIME * TIME * 400;
 			}
 			return r1;
+		}
+		Dif_Y(args) {
+			return Number(
+				NDT.Spr.Var.Get('main', 'MENU.scroll.nanido') +
+					(Number(args.POS) - 1) *
+						(NDT.Spr.Var.Get('main', '%MENU.songbar.space') * -1),
+			);
+		}
+		Dif_ID(args) {
+			return String(
+				NDT.Spr.List.Get('main', '@MENU.songs_loaded.getDifficults')[
+					(Number(args.POS) - 1) * 5 + 1
+				],
+			);
 		}
 		PLA_UI_Col() {
 			if (NDT.Spr.Var.Get('main', '@IMG.blackOrWhite') == 'black') {
@@ -1030,7 +1059,8 @@
 					}
 					const res = await fetch(url);
 					const data = await res.arrayBuffer();
-					SPZip[tnow.md5ext] = data;
+					const U8A = new Uint8Array(data);
+					SPZip[tnow.md5ext] = U8A;
 				}
 				for (const tnow of now.sounds) {
 					let url;
@@ -1044,7 +1074,8 @@
 					}
 					const res = await fetch(url);
 					const data = await res.arrayBuffer();
-					SPZip[tnow.md5ext] = data;
+					const U8A = new Uint8Array(data);
+					SPZip[tnow.md5ext] = U8A;
 				}
 				await NDT.Spr.Add(
 					_toDataURL(
