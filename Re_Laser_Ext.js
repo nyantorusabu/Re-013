@@ -708,6 +708,12 @@
 			const TIME = NDT.Spr.Var.Get('main', 'TIME.game.sub');
 			const SUB = NDT.Var.Get('GAME.sub');
 			let r1 = -5;
+			if (
+				NDT.Spr.List.Get('main', 'UI.button')[0].startsWith(
+					`difficult/${String(args.POS)}`,
+				)
+			)
+				r1 += -10;
 			if (SUB == 'nanido_init' || SUB == 'nanido_init_fromplayer') {
 				r1 = r1 + T(0.6 - TIME) * T(0.6 - TIME) * 1000;
 			} else if (SUB == 'nanido_out' || SUB == 'nanido_out_tosenkyoku') {
