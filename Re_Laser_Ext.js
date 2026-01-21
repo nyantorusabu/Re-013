@@ -335,6 +335,7 @@
 						),
 					),
 					block('NABP', 'R', 'NYADDONボタンx座標'),
+					block('Dif_X', 'R', '難易度のx座標'),
 					block(
 						'Dif_Y',
 						'R',
