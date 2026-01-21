@@ -341,6 +341,7 @@
 						'難易度の [POS] 番目のy座標',
 						arg('POS', 'N', '1'),
 					),
+					block('Dif_Length', 'R', '難易度の長さ'),
 					block(
 						'Dif_ID',
 						'R',
@@ -692,11 +693,29 @@
 			}
 			return r1;
 		}
+		Dif_X() {
+			const TIME = NDT.Spr.Var.Get('main', 'TIME.game.sub');
+			const SUB = NDT.Var.Get('GAME.sub');
+			let r1 = -5;
+			if (SUB == 'nanido_init') {
+				r1 = r1 + TIME * TIME * 2000;
+			} else if (SUB == 'nanido_out_tosenkyoku') {
+				r1 = r1 + (0.6 - TIME) * (0.6 - TIME) * 1000;
+			}
+			return r1;
+		}
 		Dif_Y(args) {
 			return Number(
 				NDT.Spr.Var.Get('main', 'MENU.scroll.nanido') +
 					(Number(args.POS) - 1) *
-						(NDT.Spr.Var.Get('main', '%MENU.songbar.space') * -1),
+						(NDT.Spr.Var.Get('main', '%MENU.songbar.space') * -1) -
+					15,
+			);
+		}
+		Dif_Length() {
+			return (
+				NDT.Spr.List.Get('main', '@MENU.songs_loaded.getDifficults')
+					.length / 5
 			);
 		}
 		Dif_ID(args) {
