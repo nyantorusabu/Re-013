@@ -347,6 +347,12 @@
 						'難易度の [POS] 番目の難易度名',
 						arg('POS', 'N', '1'),
 					),
+					block(
+						'isDif',
+						'B',
+						'難易度の [POS] 番目を選択している',
+						arg('POS', 'N', '1'),
+					),
 					block('PLA_UI_Col', 'R', 'PLAYER.UI.Color'),
 					block(
 						'mainVarList',
@@ -698,6 +704,11 @@
 				NDT.Spr.List.Get('main', '@MENU.songs_loaded.getDifficults')[
 					(Number(args.POS) - 1) * 5 + 1
 				],
+			);
+		}
+		isDif(args) {
+			return NDT.Spr.List.Get('main', 'UI.button')[0].startsWith(
+				`difficult/${String(args.POS)}`,
 			);
 		}
 		PLA_UI_Col() {
