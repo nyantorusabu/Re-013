@@ -699,9 +699,9 @@
 			const SUB = NDT.Var.Get('GAME.sub');
 			let r1 = -5;
 			if (SUB == 'nanido_init') {
-				r1 = r1 + TIME * TIME * 2000;
-			} else if (SUB == 'nanido_out_tosenkyoku') {
 				r1 = r1 + (0.6 - TIME) * (0.6 - TIME) * 1000;
+			} else if (SUB == 'nanido_out_tosenkyoku') {
+				r1 = r1 + TIME * TIME * 2000;
 			}
 			return r1;
 		}
