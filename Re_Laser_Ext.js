@@ -700,20 +700,25 @@
 			return r1;
 		}
 		Dif_X(args) {
+			function T(Time) {
+				if (0 > Time) return 0;
+				return Time;
+			}
+
 			const TIME = NDT.Spr.Var.Get('main', 'TIME.game.sub');
 			const SUB = NDT.Var.Get('GAME.sub');
 			let r1 = -5;
 			if (SUB == 'nanido_init' || SUB == 'nanido_init_fromplayer') {
-				r1 = r1 + (0.6 - TIME) * (0.6 - TIME) * 1000;
+				r1 = r1 + T(0.6 - TIME) * T(0.6 - TIME) * 1000;
 			} else if (SUB == 'nanido_out' || SUB == 'nanido_out_tosenkyoku') {
 				if (
 					SUB == 'nanido_out_tosenkyoku' ||
 					Number(NDT.Spr.Var.Get('main', 'MENU.choiceID')) !==
 						Number(args.POS)
 				) {
-					r1 = r1 + TIME * TIME * 2000;
+					r1 = r1 + T(TIME) * T(TIME) * 2000;
 				} else {
-					r1 = r1 + (TIME - 0.15) * (TIME - 0.15) * 2000;
+					r1 = r1 + T(TIME - 0.15) * T(TIME - 0.15) * 2000;
 				}
 			}
 			return r1;
