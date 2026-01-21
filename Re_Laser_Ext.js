@@ -718,7 +718,7 @@
 				) {
 					r1 = r1 + T(TIME) * T(TIME) * 2000;
 				} else {
-					r1 = r1 + T(TIME - 0.15) * T(TIME - 0.15) * 2000;
+					r1 = r1 + T(TIME - 0.15) * T(TIME - 0.15) * 2000 - 5;
 				}
 			}
 			return r1;
