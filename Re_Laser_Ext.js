@@ -216,18 +216,25 @@
 					block(
 						'SetAddonActive',
 						'C',
-						'アドオンID [ID] のアドオンの有効化を [Active] にする',
+						'アドオンID [ID] の外部アドオンの有効化を [Active] にする',
 						args(arg('ID', 'S'), arg('Active', 'N', '0')),
 					),
 					block('GetAddonLength', 'R', '外部アドオンの数'),
 					block(
 						'GetAddonData',
 						'R',
-						'[Pos] 番目の外部アドオンの [Type]',
-						args(arg('Pos', 'N', '1'), arg('Type', 'S', 'id')),
+						'アドオンID/Pos [Pos] の外部アドオンの [Type]',
+						args(arg('Pos', 'S', '1'), arg('Type', 'S', 'id')),
+					),
+					block(
+						'GetAddonImage',
+						'R',
+						'アドオンID [ID] の外部アドオンのアイコン',
+						arg('ID', 'S', 'NYADDON'),
 					),
 					label('OPTION関係'),
 					block('SaveOption', 'C', 'REOPTIONを保存'),
+
 					block(
 						'SetNYADDONOption',
 						'C',
@@ -661,7 +668,20 @@
 			return Addons.length;
 		}
 		GetAddonData(args) {
-			return String(Addons[args.Pos - 1][args.Type]);
+			if (isNaN(args.Pos)) {
+				return String(
+					Addons.filter((a) => a.id == args.Pos)[0]?.[args.Type],
+				);
+			}
+			return String(Addons[args.Pos - 1]?.[args.Type]);
+		}
+		GetAddonImage(args) {
+			if (args.ID == 'NYADDON')
+				return String(NDT.Spr.Ast.Cos.Export('NYADDON', 'NYADDON'));
+			const ADN = Addons.filter((a) => a.id == args.ID)[0];
+			if (!ADN?.icon)
+				return String(NDT.Spr.Ast.Cos.Export('NYADDON', 'Addon'));
+			return String(_toDataURL(ADN.icon));
 		}
 
 		// スコア
@@ -1168,6 +1188,11 @@
 		)[0];
 		if (render) {
 			MFest.reload = true;
+		}
+		if (Object.keys(ADZip).filter((a) => a.startsWith('icon.'))[0]) {
+			MFest.icon = Object.entries(ADZip).filter(
+				(a) => a[0].startsWith('icon.')[0][1],
+			);
 		}
 		target.mfest = MFest;
 		return MFest;
