@@ -1133,7 +1133,7 @@
 			if (TmpFonts.includes(now.name)) {
 				LoadedFonts.push(now.name);
 				NDT.Spr.Ast.Cos.Delete('main', now.name);
-				const index = TmpFonts.findIndex(now.name);
+				const index = TmpFonts.findIndex((c) => c == now.name);
 				TmpFonts.splice(index, 1);
 			}
 			if (!NDT.Spr.Ast.Cos.NameList('main').includes(now.name)) {
