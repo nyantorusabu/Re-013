@@ -1132,7 +1132,7 @@
 		for (const now of costumes) {
 			if (TmpFonts.includes(now.name)) {
 				LoadedFonts.push(now.name);
-				NDT.Spr.Asr.Cos.Delete('main', now.name);
+				NDT.Spr.Ast.Cos.Delete('main', now.name);
 				const index = TmpFonts.findIndex(now.name);
 				TmpFonts.splice(index, 1);
 			}
