@@ -919,7 +919,7 @@
 			let p = 1;
 			while (Ren.length > p + 1) {
 				if (Ren[p] == '2') {
-					for (const now of Ren[p + 1]) {
+					for (const now of String(Ren[p + 1])) {
 						if (
 							!(LoadedFonts.includes(now) || Fonts.includes(now))
 						) {
