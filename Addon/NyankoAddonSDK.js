@@ -7,6 +7,7 @@
 	'use strict';
 
 	// 変数定義
+	const SDK_VER = '1.0.0';
 
 	// ライブラリ読み込みとかその辺の関数
 	async function Extension_Setup() {
@@ -93,6 +94,7 @@
 				description: window.prompt('アドオンの説明を入力'),
 				author: window.prompt('あなたのニックネームを入力'),
 				version: '1.0.0',
+				sdk_ver: SDK_VER,
 			};
 			const Spr = await NDT.Spr.Add(
 				'https://nyantorusabu.github.io/Re-013/Asset/NASDK/Template.sprite3',
@@ -146,6 +148,7 @@
 				description: window.prompt('アドオンの説明を入力'),
 				author: window.prompt('あなたのニックネームを入力'),
 				version: '1.0.0',
+				sdk_ver: SDK_VER,
 			};
 			target.mfest = mfest;
 			window.alert(`@manifestを生成しました`);
@@ -212,6 +215,18 @@
 						shadow: id,
 					},
 				};
+				b.fields = {};
+			}
+		}
+		const EBLO = Object.values(target.blocks._blocks).filter(
+			(b) =>
+				b.opcode == 'event_whenbroadcastreceived' &&
+				b.fields.BROADCAST_OPTION.value == 'Addon_Run',
+		);
+		if (EBLO) {
+			for (const now of EBLO) {
+				const b = target.blocks._blocks[now.id];
+				b.opcode = 'event_whenflagclicked';
 				b.fields = {};
 			}
 		}

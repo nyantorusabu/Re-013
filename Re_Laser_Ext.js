@@ -408,12 +408,7 @@
 							arg('Value', 'S', '["りんご", "ごりら", "らっぱ"]'),
 						),
 					),
-					block(
-						'showPrompt',
-						'R',
-						'[PROMPT] と聞く',
-						arg('PROMPT', 'S', '猫は好きですか?'),
-					),
+					block('GenerateFontData', 'C', 'フォントデータを生成'),
 					label('NDT'),
 					block('NDTVer', 'R', 'NDTのバージョン'),
 					block('NDTMessage', 'R', 'NDTの更新内容'),
@@ -495,6 +490,12 @@
 							arg('F', 'N', '2'),
 							arg('T', 'N', '3'),
 						),
+					),
+					block(
+						'showPrompt',
+						'R',
+						'[PROMPT] と聞く',
+						arg('PROMPT', 'S', '猫は好きですか?'),
 					),
 				),
 				{
@@ -671,9 +672,12 @@
 			if (isNaN(args.Pos)) {
 				return String(
 					Addons.filter((a) => a.id == args.Pos)[0]?.[args.Type],
-				);
+				).replaceAll(':', '::');
 			}
-			return String(Addons[args.Pos - 1]?.[args.Type]);
+			return String(Addons[args.Pos - 1]?.[args.Type]).replaceAll(
+				':',
+				'::',
+			);
 		}
 		GetAddonImage(args) {
 			if (args.ID == 'NYADDON')
@@ -906,6 +910,27 @@
 		tTot(args) {
 			return String(args.TEXT.slice(args.F - 1, args.T));
 		}
+		async GenerateFontData() {
+			const Fonts = NDT.Spr.Ast.Cos.NameList('main');
+			const Ren = NDT.List.Get('easyRenderer');
+			let p = 1;
+			while (Ren.length > p + 1) {
+				if (Ren[p] == '2') {
+					for (const now of Ren[p + 1]) {
+						if (!Fonts.includes(now)) {
+							const Font = `<svg version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="4.22117" height="4.64101" viewBox="0,0,4.22117,4.64101"><g transform="translate(-237.93027,-177.95992)"><g fill="#ff0000" stroke="none" stroke-miterlimit="10" font-family="&quot;MisakiGothic2nd&quot;, Sans Serif" font-size="40"><text transform="translate(237.98055,181.5002) scale(0.10056,0.10056)" font-size="40" xml:space="preserve" fill="#ff0000"><tspan x="0" dy="0">${now}</tspan></text></g></g></svg><!--rotationCenter:2.069727559706223:2.04008082519465-->`;
+							await NDT.Spr.Ast.Cos.Add(
+								'main',
+								String(now),
+								`data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(Font)))}`,
+							);
+							Fonts.push(now);
+						}
+					}
+				}
+				p += 20;
+			}
+		}
 	}
 
 	// ブロック用関数
@@ -954,17 +979,23 @@
 				HScore[k] = v;
 			}
 		}
-		if (ADOPT) {
-			for (const [k, v] of Object.entries(ADOPT)) {
-				AddonOption[k] = v;
-			}
-		}
 		if (AD) {
 			for (const now of AD) {
 				Addons.push(now);
 				if (!now.active) continue;
 				const ADURL = await NS.Get(`re_addon_${now.id}`);
 				const AD = await _InstallAddon(ADURL);
+			}
+		}
+		if (ADOPT) {
+			for (const [addon_id, spaces] of Object.entries(ADOPT)) {
+				for (const [space_id, lists] of Object.entries(spaces)) {
+					for (const [list_id, list] of Object.entries(lists)) {
+						if (AddonOption[addon_id]?.[space_id]?.[list_id])
+							AddonOption[addon_id][space_id][list_id].value =
+								list.value;
+					}
+				}
 			}
 		}
 	}
@@ -1193,6 +1224,32 @@
 			MFest.icon = Object.entries(ADZip).filter(
 				(a) => a[0].startsWith('icon.')[0][1],
 			);
+		}
+		if (Object.keys(ADZip).filter((a) => a == 'option.json')[0]) {
+			const ADOPT = JSON.parse(fflate.strFromU8(ADZip['option.json']));
+			if (!AddonOption[MFest.id]) AddonOption[MFest.id] = {};
+			for (const [space_id, lists] of Object.entries(ADOPT)) {
+				if (!AddonOption[MFest.id][space_id])
+					AddonOption[MFest.id][space_id] = {};
+				for (const [list_id, list] of Object.entries(lists)) {
+					if (!AddonOption[MFest.id][space_id][list_id])
+						AddonOption[MFest.id][space_id][list_id] = {};
+					const List = AddonOption[MFest.id][space_id][list_id];
+					List.type = list.type;
+					if (list.text) {
+						List.text = list.text;
+					} else {
+						List.text = String(list_id);
+					}
+					if (list.default) {
+						List.default = list.default;
+					} else {
+						List.default = '1';
+					}
+					if (list.type == 'list') List.list = list.list;
+					if (list.type == 'number') List.amount = list.amount;
+				}
+			}
 		}
 		target.mfest = MFest;
 		return MFest;
