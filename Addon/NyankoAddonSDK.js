@@ -94,6 +94,7 @@
 				description: window.prompt('アドオンの説明を入力'),
 				author: window.prompt('あなたのニックネームを入力'),
 				version: '1.0.0',
+				sdk: 'NYADDONSDK',
 				sdk_ver: SDK_VER,
 			};
 			const Spr = await NDT.Spr.Add(
@@ -148,6 +149,7 @@
 				description: window.prompt('アドオンの説明を入力'),
 				author: window.prompt('あなたのニックネームを入力'),
 				version: '1.0.0',
+				sdk: 'NYADDONSDK',
 				sdk_ver: SDK_VER,
 			};
 			target.mfest = mfest;
@@ -174,6 +176,8 @@
 		}
 		const mfest = JSON.parse(CMT[1].text.replace('@manifest', ''));
 		delete mfest.restart;
+		mfest.sdk = 'NYADDONSDK';
+		mfest.sdk_ver = SDK_VER;
 		target.mfest = mfest;
 		delete target.comments[CMT[0]];
 		const BLO = Object.values(target.blocks._blocks).filter(
