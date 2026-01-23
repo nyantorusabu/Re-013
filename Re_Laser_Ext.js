@@ -38,6 +38,9 @@
 	const HScore = {};
 	const Var = {};
 
+	const TmpFonts = [];
+	const LoadedFonts = [];
+
 	let Setup = false;
 	let Loaded = false;
 	const PressKeys = [];
@@ -917,7 +920,9 @@
 			while (Ren.length > p + 1) {
 				if (Ren[p] == '2') {
 					for (const now of Ren[p + 1]) {
-						if (!Fonts.includes(now)) {
+						if (
+							!(LoadedFonts.includes(now) || Fonts.includes(now))
+						) {
 							const Font = `<svg version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="4.22117" height="4.64101" viewBox="0,0,4.22117,4.64101"><g transform="translate(-237.93027,-177.95992)"><g fill="#ff0000" stroke="none" stroke-miterlimit="10" font-family="&quot;MisakiGothic2nd&quot;, Sans Serif" font-size="40"><text transform="translate(237.98055,181.5002) scale(0.10056,0.10056)" font-size="40" xml:space="preserve" fill="#ff0000"><tspan x="0" dy="0">${now}</tspan></text></g></g></svg><!--rotationCenter:2.069727559706223:2.04008082519465-->`;
 							await NDT.Spr.Ast.Cos.Add(
 								'main',
@@ -925,6 +930,7 @@
 								`data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(Font)))}`,
 							);
 							Fonts.push(now);
+							TmpFonts.push(now);
 						}
 					}
 				}
@@ -1124,6 +1130,12 @@
 			}
 		}
 		for (const now of costumes) {
+			if (TmpFonts.includes(now.name)) {
+				LoadedFonts.push(now.name);
+				NDT.Spr.Asr.Cos.Delete('main', now.name);
+				const index = TmpFonts.findIndex(now.name);
+				TmpFonts.splice(index, 1);
+			}
 			if (!NDT.Spr.Ast.Cos.NameList('main').includes(now.name)) {
 				let url;
 				if (Mode == 'zip' && Object.keys(PJZip).includes(now.md5ext)) {
