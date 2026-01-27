@@ -11,7 +11,7 @@
 		NYADDON: {
 			System: {
 				ID: {
-					text: 'ユーザー名',
+					text: 'ユーザーめい',
 					type: 'input',
 					default: 'Guest',
 				},
