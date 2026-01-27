@@ -593,7 +593,7 @@
 			const List = [
 				{
 					id: 388537072,
-					title: 'Re:LASER',
+					title: 'Re::LASER',
 					user: 'こむぎ湖(ZVA6)',
 					PJImage: `https://trampoline.turbowarp.org/thumbnails/388537072?width=240&height=180`,
 					USERImage: `https://trampoline.turbowarp.org/avatars/6857754?width=32&height=32`,
