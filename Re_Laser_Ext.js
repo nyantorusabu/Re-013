@@ -16,19 +16,19 @@
 					default: 'Guest',
 				},
 				AutoSync: {
-					text: '起動時自動で同期する',
+					text: 'AutoSync',
 					type: 'boolean',
 					default: false,
 				},
 			},
 			Touch: {
 				isActive: {
-					text: 'タップ操作',
+					text: 'タップそうさ',
 					type: 'boolean',
 					default: navigator.maxTouchPoints > 0,
 				},
 				Type: {
-					text: '判定の種類',
+					text: 'タイプ',
 					type: 'list',
 					list: ['1', '2'],
 					default: '1',
