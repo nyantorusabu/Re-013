@@ -56,6 +56,7 @@
 	window.NYADDON = {};
 	NYADDON.Option = AddonOption;
 	NYADDON.SetOption = _SetOption;
+	NYADDON.GetOption = _GetOption;
 
 	// ライブラリ読み込みとかその辺の関数
 	async function Extension_Setup() {
@@ -1006,7 +1007,7 @@
 		if (Params.has('id')) {
 			_DeleteAllChart();
 			await _ImportChart('sc', Params.get('id'));
-		} else if (_GetOption('NYADDON', 'System', 'AutoSync')) {
+		} else if (_GetOption('NYADDON', 'System', 'AutoSync') == 'true') {
 			_DeleteAllChart();
 			await _ImportChart('sc', 388537072);
 		}
