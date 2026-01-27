@@ -11,19 +11,24 @@
 		NYADDON: {
 			System: {
 				ID: {
-					text: 'ユーザーめい',
+					text: 'ユーザー名',
 					type: 'input',
 					default: 'Guest',
+				},
+				AutoSync: {
+					text: '起動時自動で同期する',
+					type: 'boolean',
+					default: false,
 				},
 			},
 			Touch: {
 				isActive: {
-					text: 'タップそうさ',
+					text: 'タップ操作',
 					type: 'boolean',
-					default: false,
+					default: navigator.maxTouchPoints > 0,
 				},
 				Type: {
-					text: 'タイプ',
+					text: '判定の種類',
 					type: 'list',
 					list: ['1', '2'],
 					default: '1',
@@ -473,7 +478,12 @@
 					block(
 						'isTouching',
 						'B',
-						'スプライトにいずれかの手が触れている',
+						'スプライトにいずれかの指が触れている',
+					),
+					block(
+						'TouchingPoints',
+						'R',
+						'スプライトに触れている指の本数',
 					),
 					block(
 						'StartsW',
@@ -548,17 +558,7 @@
 			return ChartUser[args.ChaID];
 		}
 		DeleteAllChart() {
-			for (const now of NDT.Spr.Ast.Sou.IDList('MUSIC')) {
-				if (NDT.Spr.Ast.Sou.NameList('MUSIC').includes(now)) {
-					NDT.Spr.Ast.Sou.Delete('MUSIC', now);
-				}
-				if (Mods.filter((m) => m.chart == now).length > 0) {
-					NDT.Spr.Delete(
-						Mods.filter((m) => m.chart == now)[0].sprite,
-					);
-				}
-			}
-			NDT.List.Get('譜面データ/charts').length = 0;
+			_DeleteAllChart();
 		}
 		DeleteChart(args) {
 			const ID = args.ID;
@@ -588,8 +588,16 @@
 		}
 		async SetCStore(args) {
 			ChartStore.length = 0;
-			const List = [];
 			const Del = [1156261781, 388537072];
+			const List = [
+				{
+					id: 388537072,
+					title: 'Re:LASER',
+					user: 'こむぎ湖(ZVA6)',
+					PJImage: `https://trampoline.turbowarp.org/thumbnails/388537072?width=240&height=180`,
+					USERImage: `https://trampoline.turbowarp.org/avatars/6857754?width=32&height=32`,
+				},
+			];
 			let P = 0;
 			while (true) {
 				const res = await fetch(
@@ -824,31 +832,13 @@
 			_SetOption(args.ID, args.Space, args.Key, args.Value);
 		}
 		GetNYADDONOptionData(args) {
-			if (!AddonOption[args.ID]?.[args.Space]?.[args.Key]) return;
-			return String(
-				AddonOption[args.ID][args.Space][args.Key][args.Type],
-			);
+			const ADNOPT = AddonOption[args.ID]?.[args.Space]?.[args.Key];
+			if (!ADNOPT) return;
+			return String(ADNOPT[args.Type]);
 		}
 		GetNYADDONOptionValue(args) {
-			if (!AddonOption[args.ID]?.[args.Space]?.[args.Key]) return;
-			let v;
-			if (
-				AddonOption[args.ID]?.[args.Space]?.[args.Key].hasOwnProperty(
-					'value',
-				)
-			) {
-				v = AddonOption[args.ID]?.[args.Space]?.[args.Key].value;
-			} else {
-				v = AddonOption[args.ID][args.Space][args.Key].default;
-			}
-			if (AddonOption[args.ID]?.[args.Space]?.[args.Key].type == 'list') {
-				return String(
-					AddonOption[args.ID]?.[args.Space]?.[args.Key].list[
-						Number(v) - 1
-					],
-				);
-			}
-			return String(v);
+			const ADNOPT = AddonOption[args.ID]?.[args.Space]?.[args.Key];
+			return String(_GetOption(args.ID, args.Space, args.Key));
 		}
 		GetNYADDONOptionList(args) {
 			if (!AddonOption[args.ID]?.[args.Space]?.[args.Key]) return;
@@ -903,7 +893,10 @@
 			PressKeys.push(args.KEY);
 		}
 		isTouching(args, util) {
-			return _isTouching(util.target);
+			return _Touch.isTouching(util.target);
+		}
+		TouchingPoints(args, util) {
+			return _Touch.TouchingPoints(util.target);
 		}
 		StartsW(args) {
 			return JSON.stringify(
@@ -997,13 +990,38 @@
 			for (const [addon_id, spaces] of Object.entries(ADOPT)) {
 				for (const [space_id, lists] of Object.entries(spaces)) {
 					for (const [list_id, list] of Object.entries(lists)) {
-						if (AddonOption[addon_id]?.[space_id]?.[list_id])
+						if (
+							AddonOption[addon_id]?.[space_id]?.[list_id] &&
+							list.hasOwnProperty('value')
+						) {
 							AddonOption[addon_id][space_id][list_id].value =
 								list.value;
+						}
 					}
 				}
 			}
 		}
+
+		const Params = new URLSearchParams(window.location.search);
+		if (Params.has('id')) {
+			_DeleteAllChart();
+			await _ImportChart('sc', Params.get('id'));
+		} else if (_GetOption('NYADDON', 'System', 'AutoSync')) {
+			_DeleteAllChart();
+			await _ImportChart('sc', 388537072);
+		}
+	}
+	function _DeleteAllChart() {
+		for (const now of NDT.Spr.Ast.Sou.IDList('MUSIC')) {
+			if (NDT.Spr.Ast.Sou.NameList('MUSIC').includes(now)) {
+				NDT.Spr.Ast.Sou.Delete('MUSIC', now);
+			}
+		}
+		for (const now of Mods) {
+			NDT.Spr.Delete(now.sprite);
+		}
+		Mods.length = 0;
+		NDT.List.Get('譜面データ/charts').length = 0;
 	}
 	function _AllChart() {
 		return _ChartData()
@@ -1154,10 +1172,11 @@
 					.filter((b) => b.opcode == 'event_whenbroadcastreceived')
 					.map((b) => b.fields.BROADCAST_OPTION[0]);
 				let install = false;
+				let MOD;
 				for (const tnow of InstallModList) {
 					if (messages.includes(tnow)) {
 						install = true;
-						Mods.filter((m) => (m.id = tnow))[0].sprite = now.name;
+						MOD = Mods.filter((m) => (m.id = tnow))[0];
 						break;
 					}
 				}
@@ -1195,13 +1214,14 @@
 					const U8A = new Uint8Array(data);
 					SPZip[tnow.md5ext] = U8A;
 				}
-				await NDT.Spr.Add(
+				const ModTarget = await NDT.Spr.Add(
 					_toDataURL(
 						fflate.zipSync(SPZip, {
 							level: 0,
 						}),
 					),
 				);
+				MOD.sprite = ModTarget.id;
 			}
 		}
 	}
@@ -1278,32 +1298,48 @@
 		delete AddonSprite[id];
 	}
 	function _SetOption(id, space, key, value) {
+		const ADNOPT = AddonOption[id]?.[space]?.[key];
+		if (!ADNOPT) {
+			Log('e', `オプション"${id}.${space}.${key}"は存在しません`);
+			return;
+		}
 		if (
 			(value == 'up' || value == 'down') &&
-			AddonOption[id][space][key].type == 'list'
+			(ADNOPT.type == 'list' || ADNOPT.type == 'number')
 		) {
-			if (!AddonOption[id][space][key].hasOwnProperty('value'))
-				AddonOption[id][space][key].value =
-					AddonOption[id][space][key].default;
+			const MAX = ADNOPT.type == 'list' ? ADNOPT.list.length : ADNOPT.max;
+			const MIN = ADNOPT.type == 'list' ? 1 : ADNOPT.min;
+			if (!ADNOPT.hasOwnProperty('value') || isNaN(ADNOPT.value)) {
+				ADNOPT.value = ADNOPT.default;
+			}
 			if (value == 'down') {
-				AddonOption[id][space][key].value =
-					Number(AddonOption[id][space][key].value) - 1;
-				if (1 > AddonOption[id][space][key].value)
-					AddonOption[id][space][key].value =
-						AddonOption[id][space][key].list.length;
+				ADNOPT.value = Number(ADNOPT.value) - 1;
+				if (MIN > ADNOPT.value) ADNOPT.value = MAX;
 			} else {
-				AddonOption[id][space][key].value =
-					Number(AddonOption[id][space][key].value) + 1;
-				if (
-					AddonOption[id][space][key].list.length <
-					AddonOption[id][space][key].value
-				)
-					AddonOption[id][space][key].value = 1;
+				ADNOPT.value = Number(ADNOPT.value) + 1;
+				if (MAX < ADNOPT.value) ADNOPT.value = MIN;
 			}
 		} else {
-			AddonOption[id][space][key].value = value;
+			ADNOPT.value = value;
 		}
 		localStorage.setItem('re_addon_option', JSON.stringify(AddonOption));
+	}
+	function _GetOption(id, space, key) {
+		const ADNOPT = AddonOption[id]?.[space]?.[key];
+		if (!ADNOPT) {
+			Log('e', `オプション"${id}.${space}.${key}"は存在しません`);
+			return;
+		}
+		let v;
+		if (ADNOPT.hasOwnProperty('value')) {
+			v = ADNOPT.value;
+		} else {
+			v = ADNOPT.default;
+		}
+		if (ADNOPT.type == 'list') {
+			return ADNOPT.list[Number(v) - 1];
+		}
+		return v;
 	}
 	// リサイズ
 	async function _resizeImage(
@@ -1585,13 +1621,22 @@
 	// 下の関数がNDTを要求するのでこのタイミングでセットアップ
 	await Extension_Setup();
 	// タップ検出
-	const _isTouching = (function () {
+	const _Touch = (function () {
+		// タッチ非対応デバイスなら空のオブジェクトを返す
 		if (!(navigator.maxTouchPoints > 0 || 'ontouchstart' in window)) {
-			return () => false;
+			return {
+				isTouching: () => false,
+				TouchingPoints: () => 0,
+			};
 		}
 
 		const vm = NDT.VM;
-		if (!vm?.runtime?.renderer?.canvas) return () => false;
+		if (!vm?.runtime?.renderer?.canvas) {
+			return {
+				isTouching: () => false,
+				TouchingPoints: () => 0,
+			};
+		}
 
 		const canvas = vm.runtime.renderer.canvas;
 		const fingers = new Map(); // Scratch ID → {x, y}
@@ -1638,17 +1683,34 @@
 			}
 		};
 
+		// イベントリスナーの登録（passive: false で preventDefault が効くように）
 		canvas.addEventListener('touchstart', handleStart, { passive: false });
 		canvas.addEventListener('touchmove', handleMove, { passive: false });
 		canvas.addEventListener('touchend', handleEnd, { passive: false });
 		canvas.addEventListener('touchcancel', handleEnd, { passive: false });
 
-		return (target) => {
+		// 対象スプライトに触れているかどうか（1つでも触れていれば true）
+		const isTouching = (target) => {
 			if (!target?.isTouchingPoint) return false;
 			for (const { x, y } of fingers.values()) {
 				if (target.isTouchingPoint(x, y)) return true;
 			}
 			return false;
+		};
+
+		// 対象スプライトに現在触れている指の本数を返す
+		const TouchingPoints = (target) => {
+			if (!target?.isTouchingPoint) return 0;
+			let count = 0;
+			for (const { x, y } of fingers.values()) {
+				if (target.isTouchingPoint(x, y)) count++;
+			}
+			return count;
+		};
+
+		return {
+			isTouching,
+			TouchingPoints,
 		};
 	})();
 	Scratch.extensions.register(new ReLaserExt());
