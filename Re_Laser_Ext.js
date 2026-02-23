@@ -1209,6 +1209,8 @@
 					delete LCList[oldId];
 				}
 				const Block = now.blocks;
+				const sVar = stage.variables;
+				const sList = stage.lists;
 				for (const bnow of Object.keys(Block)) {
 					const bl = Block[bnow];
 					if (Array.isArray(bl) && (bl[0] == 12 || bl[0] == 13)) {
@@ -1223,8 +1225,21 @@
 							const mv = (
 								isVar ? NDT.Var.All() : NDT.List.All()
 							).find((v) => v.name == name);
-							if (mv && mv.id !== id) {
-								bl[2] = mv.id;
+							if (mv) {
+								if (mv.id !== id) bl[2] = mv.id;
+							} else {
+								const nVar = isVar ? sVar : sList;
+								const nLC = isVar ? LCVar : LCList;
+								const nLConv = isVar ? LCVarConv : LCListConv;
+								if (nVar.hasOwnProperty(id)) {
+									const newId = `Global.${id}`;
+									const newName = `Global.${name}`;
+									bl[2] = newId;
+									bl[1] = newName;
+									nLC[newId] = nVar[id];
+									nLC[newId][0] = newName;
+									nLConv[id] = [newId, newName];
+								}
 							}
 						}
 					}
@@ -1241,8 +1256,21 @@
 							const mv = (
 								isVar ? NDT.Var.All() : NDT.List.All()
 							).find((v) => v.name == name);
-							if (mv && mv.id !== id) {
-								fv[1] = mv.id;
+							if (mv) {
+								if (mv.id !== id) fv[1] = mv.id;
+							} else {
+								const nVar = isVar ? sVar : sList;
+								const nLC = isVar ? LCVar : LCList;
+								const nLConv = isVar ? LCVarConv : LCListConv;
+								if (nVar.hasOwnProperty(id)) {
+									const newId = `Global.${id}`;
+									const newName = `Global.${name}`;
+									fv[1] = newId;
+									fv[0] = newName;
+									nLC[newId] = nVar[id];
+									nLC[newId][0] = newName;
+									nLConv[id] = [newId, newName];
+								}
 							}
 						}
 					}
@@ -1261,13 +1289,26 @@
 						if (lc) {
 							ivar[2] = lc[0];
 							ivar[1] = lc[1];
-							continue;
-						}
-						const mv = (isVar ? NDT.Var.All() : NDT.List.All).find(
-							(v) => v.name == name,
-						);
-						if (mv && mv.id !== id) {
-							ivar[2] = mv.id;
+						} else {
+							const mv = (
+								isVar ? NDT.Var.All() : NDT.List.All
+							).find((v) => v.name == name);
+							if (mv) {
+								if (mv.id !== id) ivar[2] = mv.id;
+							} else {
+								const nVar = isVar ? sVar : sList;
+								const nLC = isVar ? LCVar : LCList;
+								const nLConv = isVar ? LCVarConv : LCListConv;
+								if (nVar.hasOwnProperty(id)) {
+									const newId = `Global.${id}`;
+									const newName = `Global.${name}`;
+									ivar[2] = newId;
+									ivar[1] = newName;
+									nLC[newId] = nVar[id];
+									nLC[newId][0] = newName;
+									nLConv[id] = [newId, newName];
+								}
+							}
 						}
 					}
 				}
