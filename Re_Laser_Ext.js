@@ -1065,7 +1065,7 @@
 		}
 
 		const Mode = MODE.toLowerCase();
-		let PJ, Author;
+		let PJ, Author, PJZip;
 		if (Mode == 'sc') {
 			const resData = await fetch(
 				`https://trampoline.turbowarp.org/api/projects/${SRC}`,
@@ -1080,7 +1080,7 @@
 			const res = await fetch(SRC);
 			const data = await res.arrayBuffer();
 			const U8A = new Uint8Array(data);
-			const PJZip = fflate.unzipSync(U8A);
+			PJZip = fflate.unzipSync(U8A);
 			PJ = JSON.parse(fflate.strFromU8(PJZip['project.json']));
 			Author = 'unknown';
 		}
@@ -1162,13 +1162,13 @@
 				} else {
 					url = `https://assets.scratch.mit.edu/internalapi/asset/${now.md5ext}/get`;
 				}
-				url = await _resizeImage(url);
+				if (now.name.length == 1) url = await _resizeImage(url);
 				await NDT.Spr.Ast.Cos.Add('main', now.name, url);
 			}
 		}
 
 		for (const now of targets) {
-			if (!(now.isStage || NDT.Spr.NameList.includes(now.name))) {
+			if (!now.isStage) {
 				const messages = Object.values(now.blocks)
 					.filter((b) => b.opcode == 'event_whenbroadcastreceived')
 					.map((b) => b.fields.BROADCAST_OPTION[0]);
@@ -1182,6 +1182,95 @@
 					}
 				}
 				if (!install) continue;
+				const LCVarConv = {};
+				const LCVar = now.variables;
+				for (const vnow of Object.keys(LCVar)) {
+					const oldId = vnow;
+					const oldName = LCVar[oldId][0];
+					if (oldId.startsWith('Local.')) continue;
+					const newId = `Local.${oldId}`;
+					const newName = `Local.${oldName}`;
+					LCVar[newId] = LCVar[oldId];
+					LCVar[newId][0] = newName;
+					LCVarConv[oldId] = [newId, newName];
+					delete LCVar[oldId];
+				}
+				const LCListConv = {};
+				const LCList = now.lists;
+				for (const lnow of Object.keys(LCList)) {
+					const oldId = lnow;
+					const oldName = LCList[oldId][0];
+					if (oldId.startsWith('Local.')) continue;
+					const newId = `Local.${oldId}`;
+					const newName = `Local.${oldName}`;
+					LCList[newId] = LCList[oldId];
+					LCList[newId][0] = newName;
+					LCListConv[oldId] = [newId, newName];
+					delete LCList[oldId];
+				}
+				const Block = now.blocks;
+				for (const bnow of Object.keys(Block)) {
+					const bl = Block[bnow];
+					if (Array.isArray(bl) && (bl[0] == 12 || bl[0] == 13)) {
+						const isVar = bl[0] == 12;
+						const name = bl[1];
+						const id = bl[2];
+						const lc = isVar ? LCVarConv[id] : LCListConv;
+						if (lc) {
+							bl[2] = lc[0];
+							bl[1] = lc[1];
+						} else {
+							const mv = (
+								isVar ? NDT.Var.All() : NDT.List.All()
+							).find((v) => v.name == name);
+							if (mv && mv.id !== id) {
+								bl[2] = mv.id;
+							}
+						}
+					}
+					if (bl.opcode.startsWith('data_')) {
+						const isVar = bl.fields.hasOwnProperty('VARIABLE');
+						const fv = isVar ? bl.fields.VARIABLE : bl.fields.LIST;
+						const name = fv[0];
+						const id = fv[1];
+						const lc = isVar ? LCVarConv[id] : LCListConv[id];
+						if (lc) {
+							fv[1] = lc[0];
+							fv[0] = lc[1];
+						} else {
+							const mv = (
+								isVar ? NDT.Var.All() : NDT.List.All()
+							).find((v) => v.name == name);
+							if (mv && mv.id !== id) {
+								fv[1] = mv.id;
+							}
+						}
+					}
+					const input = bl.inputs;
+					for (const inow of Object.keys(input)) {
+						const ivar = input[inow][1];
+						const isVar = ivar[0] == 12;
+						if (
+							!(Array.isArray(ivar) && (isVar || ivar[0] == 13))
+						) {
+							continue;
+						}
+						const name = ivar[1];
+						const id = ivar[2];
+						const lc = isVar ? LCVarConv[id] : LCListConv[id];
+						if (lc) {
+							ivar[2] = lc[0];
+							ivar[1] = lc[1];
+							continue;
+						}
+						const mv = (isVar ? NDT.Var.All() : NDT.List.All).find(
+							(v) => v.name == name,
+						);
+						if (mv && mv.id !== id) {
+							ivar[2] = mv.id;
+						}
+					}
+				}
 				const SPZip = {
 					'sprite.json': fflate.strToU8(JSON.stringify(now)),
 				};
