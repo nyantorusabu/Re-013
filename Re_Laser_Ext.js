@@ -1166,6 +1166,7 @@
 				const Asset = await NDT.Spr.Ast.Cos.Add('main', now.name, url);
 				Asset.rotationCenterX = now.rotationCenterX;
 				Asset.rotationCenterY = now.rotationCenterY;
+				await NDT.Spr.Ast.Cos.Update('main', now.name);
 			}
 		}
 
