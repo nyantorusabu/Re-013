@@ -1163,7 +1163,9 @@
 					url = `https://assets.scratch.mit.edu/internalapi/asset/${now.md5ext}/get`;
 				}
 				if (now.name.length == 1) url = await _resizeImage(url);
-				await NDT.Spr.Ast.Cos.Add('main', now.name, url);
+				const Asset = await NDT.Spr.Ast.Cos.Add('main', now.name, url);
+				Asset.rotationCenterX = now.rotationCenterX;
+				Asset.rotationCenterY = now.rotationCenterY;
 			}
 		}
 
