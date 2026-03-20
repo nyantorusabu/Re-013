@@ -792,11 +792,7 @@
 			);
 		}
 		PLA_UI_Col() {
-			if (NDT.Spr.Var.Get('main', '@IMG.blackOrWhite') == 'black') {
-				return '#ffffff';
-			} else {
-				return '#000000';
-			}
+			return String(NDT.Var.Get('PLAYER.color.UI'));
 		}
 		mainVarList() {
 			return JSON.stringify(NDT.Spr.Var.NameList('main'));
@@ -1014,9 +1010,7 @@
 	}
 	function _DeleteAllChart() {
 		for (const now of NDT.Spr.Ast.Sou.IDList('MUSIC')) {
-			if (NDT.Spr.Ast.Sou.NameList('MUSIC').includes(now)) {
-				NDT.Spr.Ast.Sou.Delete('MUSIC', now);
-			}
+			NDT.Spr.Ast.Sou.Delete('MUSIC', now);
 		}
 		for (const now of Mods) {
 			NDT.Spr.Delete(now.sprite);
