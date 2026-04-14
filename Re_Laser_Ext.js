@@ -511,6 +511,12 @@
 						'[PROMPT] と聞く',
 						arg('PROMPT', 'S', '猫は好きですか?'),
 					),
+					block(
+						'openURL',
+						'C',
+						'新しいタブで [URL] を開く',
+						arg('URL', 'S', 'https://example.com'),
+					),
 				),
 				{
 					menuIconURI:
@@ -858,8 +864,8 @@
 			if (args.Key !== '') out = out[args.Key];
 			return String(Object.keys(out)[args.POS - 1]);
 		}
-		showPrompt(args) {
-			return String(window.prompt(args.PROMPT));
+		async showPrompt(args) {
+			return String(await window.prompt(args.PROMPT));
 		}
 		// NDT
 		NDTVer() {
@@ -899,6 +905,16 @@
 			return JSON.stringify(
 				JSON.parse(args.JSON).filter((v) => v.startsWith(args.TEXT)),
 			);
+		}
+		openURL(args, util) {
+			const SprName = util.target.getName();
+			if (SprName !== 'NYADDON') {
+				const open = window.confirm(
+					`${SprName} が次のサイトを開こうとしています:\n${args.URL}\n許可しますか?`,
+				);
+				if (!open) return;
+			}
+			window.open(args.URL, '_blank');
 		}
 		tTot(args) {
 			return String(args.TEXT.slice(args.F - 1, args.T));
@@ -1061,12 +1077,13 @@
 		const Mode = MODE.toLowerCase();
 		let PJ, Author, PJZip;
 		if (Mode == 'sc') {
+			const PID = String(SRC).match(/(\d+)/)[0];
 			const resData = await fetch(
-				`https://trampoline.turbowarp.org/api/projects/${SRC}`,
+				`https://trampoline.turbowarp.org/api/projects/${PID}`,
 			);
 			const PJData = await resData.json();
 			const res = await fetch(
-				`https://projects.scratch.mit.edu/${SRC}?token=${PJData.project_token}`,
+				`https://projects.scratch.mit.edu/${PID}?token=${PJData.project_token}`,
 			);
 			PJ = await res.json();
 			Author = PJData.author.username;
