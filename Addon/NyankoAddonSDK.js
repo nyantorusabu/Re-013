@@ -510,11 +510,11 @@
 						const spaceObj = initialData[spaceID];
 						if (spaceObj && typeof spaceObj === 'object') {
 							spacesData[spaceID] = {
-								text: spaceObj._space_text || spaceID,
+								text: spaceObj.text || spaceID,
 								datas: [],
 							};
 							for (const dataID in spaceObj) {
-								if (dataID === '_space_text') continue;
+								if (dataID === 'text') continue;
 								if (
 									Object.prototype.hasOwnProperty.call(
 										spaceObj,
@@ -1074,7 +1074,7 @@
 
 					result[sId] = {};
 					if (spaceData.text) {
-						result[sId]['_space_text'] = spaceData.text;
+						result[sId].text = spaceData.text;
 					}
 
 					for (const dataItem of spaceData.datas) {

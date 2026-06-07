@@ -70,30 +70,32 @@
 	function _getDataEntry(id, space, key) {
 		const addon = AddonOption[id];
 		if (!addon) return undefined;
-		const spaceObj =
-			addon.space && addon.space[space]
-				? addon.space[space]
-				: addon[space];
+		// Bug Fix A: 旧 `addon.space && addon.space[space] ? ...` パターンは
+		// addon.space[space] が定義済みでも falsy なら誤フォールバックするため修正。
+		// addon.space が存在するかだけで新旧フォーマットを判別する。
+		const spaceObj = addon.space ? addon.space[space] : addon[space];
 		if (!spaceObj) return undefined;
-		return spaceObj.data && spaceObj.data[key]
-			? spaceObj.data[key]
-			: spaceObj[key];
+		return spaceObj.data ? spaceObj.data[key] : spaceObj[key];
 	}
 
 	function _SaveOptionsToLocalStorage() {
 		const saveObj = {};
 		for (const [addonId, addon] of Object.entries(AddonOption)) {
 			saveObj[addonId] = {};
-			const spaces = addon && addon.space ? addon.space : addon;
+			// Bug Fix B: falsy フォールバックを修正（Bug Fix A と同様の理由）
+			const spaces = addon.space ? addon.space : addon;
 			for (const [spaceId, space] of Object.entries(spaces)) {
 				if (spaceId === 'text') continue;
+				// スペースが非オブジェクトの場合は TypeError 防止のためスキップ
+				if (typeof space !== 'object' || space === null) continue;
 				saveObj[addonId][spaceId] = {};
-				const datas = space && space.data ? space.data : space;
+				const datas = space.data ? space.data : space;
 				for (const [dataId, data] of Object.entries(datas)) {
 					if (dataId === 'text') continue;
-					if (data && data.hasOwnProperty('value')) {
+					if (typeof data !== 'object' || data === null) continue;
+					if (data.hasOwnProperty('value')) {
 						saveObj[addonId][spaceId][dataId] = data.value;
-					} else if (data && data.hasOwnProperty('default')) {
+					} else if (data.hasOwnProperty('default')) {
 						saveObj[addonId][spaceId][dataId] = data.default;
 					}
 				}
@@ -125,15 +127,9 @@
 				document.body.appendChild(script);
 			});
 		};
-		const loadSDK = async () => {
-			await NDT.VM.extensionManager.loadExtensionURL(
-				'https://nyantorusabu.github.io/Re-013/Addon/NyankoAddonSDK.js',
-			);
-		};
 
 		await loadNDT();
 		await loadfflate();
-		await loadSDK();
 
 		NDT.NEve.Add('FLAG_BEFORE', () => {
 			if (!Loaded) return;
@@ -599,10 +595,10 @@
 		}
 		// 仮変数
 		Var_Get(args) {
-			return Var[args.VarID];
+			return String(Var[args.VarID]);
 		}
 		Var_Set(args) {
-			Var[args.Value];
+			Var[args.VarID] = args.Value;
 		}
 		Var_Change(args) {
 			if (isNaN(Var[args.VarID])) {
@@ -721,10 +717,31 @@
 		}
 		async UninstallAddon(args) {
 			_UninstallAddon(args.ID);
+
+			// Bug Fix 1: findIndex が -1 のとき splice(-1,1) で末尾要素を誤削除していたのを修正
 			const Index = Addons.findIndex((a) => a.id == args.ID);
-			Addons.splice(Index, 1);
+			if (Index !== -1) Addons.splice(Index, 1);
+
+			// Bug Fix 2: アンインストール済みアドオンの AddonOption をメモリから削除
+			if (AddonOption.hasOwnProperty(args.ID)) {
+				delete AddonOption[args.ID];
+			}
+
+			// Bug Fix 3: NYADDON に登録したアドオンアイコンコスチュームを削除
+			const iconName = `addon.${args.ID}`;
+			try {
+				if (NDT.Spr.Ast.Cos.NameList('NYADDON').includes(iconName)) {
+					NDT.Spr.Ast.Cos.Delete('NYADDON', iconName);
+				}
+			} catch (e) {
+				log('w', `アドオンアイコンの削除に失敗: ${iconName}`);
+			}
+
 			await NS.Delete(`re_addon_${args.ID}`);
 			localStorage.setItem('re_addon', JSON.stringify(Addons));
+
+			// Bug Fix 4: re_addon_option からも削除済みアドオンのデータを除去して保存
+			_SaveOptionsToLocalStorage();
 		}
 		async SetAddonActive(args) {
 			const AD = Addons.filter((a) => a.id == args.ID)[0];
@@ -893,57 +910,58 @@
 		}
 		GetNYADDONOptionData(args) {
 			const ADNOPT = _getDataEntry(args.ID, args.Space, args.Key);
-			if (!ADNOPT) return;
-			return String(ADNOPT[args.Type]);
+			// Bug Fix C: return; だと Scratch が undefined を受け取り不定挙動になるため '' に統一
+			if (!ADNOPT) return '';
+			const val = ADNOPT[args.Type];
+			// String(undefined) === 'undefined' になるバグを修正
+			return val !== undefined ? String(val) : '';
 		}
 		GetNYADDONOptionValue(args) {
-			return String(_GetOption(args.ID, args.Space, args.Key));
+			return String(_GetOption(args.ID, args.Space, args.Key) ?? '');
 		}
 		GetNYADDONOptionList(args) {
 			const ADNOPT = _getDataEntry(args.ID, args.Space, args.Key);
-			if (!ADNOPT) return;
-			return String(ADNOPT.list[args.POS - 1]);
+			if (!ADNOPT || !ADNOPT.list) return '';
+			return String(ADNOPT.list[args.POS - 1] ?? '');
 		}
 		GetNYADDONOptionlength(args) {
 			let out = AddonOption;
 			if (args.ID !== '') {
 				out = out[args.ID];
+				if (out.space) out = out.space;
 			}
 			if (out && args.Space !== '') {
-				out =
-					out.space && out.space[args.Space]
-						? out.space[args.Space]
-						: out[args.Space];
+				out = out[args.Space];
+				if (out.data) out = out.data;
 			}
-			if (out && args.Key !== '') {
-				out =
-					out.data && out.data[args.Key]
-						? out.data[args.Key]
-						: out[args.Key];
-			}
-			if (out && args.Type !== '') {
-				out = out[args.Type];
-			}
-			return String(out ? Object.keys(out).length : 0);
+			return String(Object.keys(out).length);
 		}
 		GetNYADDONOptionPos(args) {
 			let out = AddonOption;
 			if (args.ID !== '') {
 				out = out[args.ID];
+				if (!out) return '';
 			}
-			if (out && args.Space !== '') {
-				out =
-					out.space && out.space[args.Space]
-						? out.space[args.Space]
-						: out[args.Space];
+
+			if (args.Space !== '') {
+				// Bug Fix E: falsy フォールバックを修正（Bug Fix A と同様の理由）
+				out = out.space ? out.space[args.Space] : out[args.Space];
+				if (!out) return '';
+				if (args.Key !== '') {
+					// 特定データエントリへ潜る
+					out = out.data ? out.data[args.Key] : out[args.Key];
+				} else {
+					// Key 未指定 → .data のキー一覧を返す
+					if (out.data) out = out.data;
+				}
+			} else if (args.ID !== '') {
+				// Space 未指定 → .space のキー一覧を返す
+				if (out.space) out = out.space;
 			}
-			if (out && args.Key !== '') {
-				out =
-					out.data && out.data[args.Key]
-						? out.data[args.Key]
-						: out[args.Key];
-			}
-			return String(out ? Object.keys(out)[args.POS - 1] : '');
+
+			if (!out || typeof out !== 'object') return '';
+			const keys = Object.keys(out).filter((k) => k !== 'text');
+			return String(keys[args.POS - 1] ?? '');
 		}
 		GetNYADDONOptionTextByPos(args) {
 			if (args.ID === '') {
@@ -952,7 +970,8 @@
 				);
 				const key = keys[args.POS - 1];
 				if (!key) return '';
-				return String(AddonOption[key].text || key);
+				// Bug Fix F: || は text が '' や 0 のとき誤フォールバックするため ?? に変更
+				return String(AddonOption[key].text ?? key);
 			} else {
 				const addon = AddonOption[args.ID];
 				if (!addon) return '';
@@ -960,7 +979,7 @@
 				const keys = Object.keys(spaces).filter((k) => k !== 'text');
 				const key = keys[args.POS - 1];
 				if (!key) return '';
-				return String(spaces[key].text || key);
+				return String(spaces[key].text ?? key);
 			}
 		}
 		async showPrompt(args) {
@@ -1048,6 +1067,15 @@
 	async function _Setup() {
 		if (Setup || !NDT.Spr.NameList.includes('main')) return;
 		Setup = true;
+
+		const loadSDK = async () => {
+			await NDT.VM.extensionManager.loadExtensionURL(
+				'https://nyantorusabu.github.io/Re-013/Addon/NyankoAddonSDK.js',
+			);
+		};
+
+		await loadSDK();
+
 		if (
 			localStorage.getItem(
 				'extensions.turbowarp.org/local-storage:Na_ZeroneIII',
@@ -1095,7 +1123,8 @@
 				Addons.push(now);
 				if (!now.active) continue;
 				const ADURL = await NS.Get(`re_addon_${now.id}`);
-				const AD = await _InstallAddon(ADURL);
+				// Bug Fix 7: 外側の const AD と同名の変数を宣言していたシャドウイングを修正
+				const _installedMFest = await _InstallAddon(ADURL);
 			}
 		}
 		// 読み込み時互換性を確保した復元処理
@@ -1304,7 +1333,7 @@
 					ivar[2] = lc[0];
 					ivar[1] = lc[1];
 				} else {
-					const mv = (isVar ? NDT.Var.All() : NDT.List.All).find(
+					const mv = (isVar ? NDT.Var.All() : NDT.List.All()).find(
 						(v) => v.name == name,
 					);
 					if (mv) {
@@ -1501,11 +1530,13 @@
 		const ADZip = fflate.unzipSync(AD);
 		const MFest = JSON.parse(fflate.strFromU8(ADZip['manifest.json']));
 		if (Object.keys(AddonSprite).includes(MFest.id)) {
-			if (
-				MFest.version ==
-				NDT.Spr.Get(AddonSprite[MFest.id]).mfest.version
-			)
-				return MFest;
+			// 再インストール時（同じバージョンやアップロード時も含む）に
+			// オプション値を保存してから旧スプライト・旧AddonOption構造を削除し、
+			// 最新のファイル内容からオプションを再登録できるようにする
+			_SaveOptionsToLocalStorage();
+			if (AddonOption.hasOwnProperty(MFest.id)) {
+				delete AddonOption[MFest.id];
+			}
 			NDT.Spr.Delete(AddonSprite[MFest.id]);
 		}
 
@@ -1550,10 +1581,11 @@
 				}
 			}
 		}
-		// 新形式に対応した option.json パース処理（旧構造の自動フォールバック付き）
-		if (Object.keys(ADZip).filter((a) => a == 'option.json')[0]) {
-			const ADOPT = JSON.parse(fflate.strFromU8(ADZip['option.json']));
-			if (!AddonOption[MFest.id]) AddonOption[MFest.id] = { space: {} };
+		if (MFest.hasOwnProperty('option')) {
+			const ADOPT = MFest.option;
+			const ADName = MFest.name || MFest.id;
+			if (!AddonOption[MFest.id])
+				AddonOption[MFest.id] = { text: ADName, space: {} };
 
 			const hasSpaceProp = ADOPT.hasOwnProperty('space');
 			if (ADOPT.text) AddonOption[MFest.id].text = ADOPT.text;
@@ -1561,7 +1593,8 @@
 			const spaces = hasSpaceProp ? ADOPT.space : ADOPT;
 
 			for (const [space_id, spaceContent] of Object.entries(spaces)) {
-				if (space_id === 'text' && !hasSpaceProp) continue;
+				// Bug Fix H-1: text は常にスキップ（旧形式限定条件 !hasSpaceProp を除去）
+				if (space_id === 'text') continue;
 
 				if (!AddonOption[MFest.id].space)
 					AddonOption[MFest.id].space = {};
@@ -1579,7 +1612,7 @@
 				if (typeof datas !== 'object' || datas === null) continue;
 
 				for (const [list_id, list] of Object.entries(datas)) {
-					if (list_id === 'text' && !hasDataProp) continue;
+					if (list_id === 'text') continue;
 
 					if (!currentSpace.data) currentSpace.data = {};
 					if (!currentSpace.data[list_id])
@@ -1588,14 +1621,56 @@
 
 					List.type = list.type;
 					List.text = list.text || String(list_id);
-					List.default = list.default || '1';
+					List.default = list.default ?? '1';
 					if (list.type == 'list') List.list = list.list;
-					if (list.type == 'number') List.amount = list.amount;
+					if (list.type == 'number') {
+						List.amount = list.amount;
+						if (list.min !== undefined) List.min = list.min;
+						if (list.max !== undefined) List.max = list.max;
+					}
 				}
+			}
+
+			if (Setup) {
+				_ApplySavedAddonOption(MFest.id);
 			}
 		}
 		target.mfest = MFest;
 		return MFest;
+	}
+	// Bug Fix 6 用ヘルパー: localStorage の re_addon_option から特定アドオンの保存値を AddonOption に復元する
+	function _ApplySavedAddonOption(addonId) {
+		let savedOpts;
+		try {
+			savedOpts = JSON.parse(
+				localStorage.getItem('re_addon_option') || 'null',
+			);
+		} catch (e) {
+			return;
+		}
+		if (!savedOpts || !savedOpts[addonId]) return;
+		const savedSpaces = savedOpts[addonId];
+		if (typeof savedSpaces !== 'object' || savedSpaces === null) return;
+		for (const [space_id, savedDatas] of Object.entries(savedSpaces)) {
+			if (typeof savedDatas !== 'object' || savedDatas === null) continue;
+			for (const [data_id, savedVal] of Object.entries(savedDatas)) {
+				const targetData = _getDataEntry(addonId, space_id, data_id);
+				if (!targetData) continue;
+				// 旧形式 { value: ... } と新形式（値そのもの）の両方に対応
+				if (
+					typeof savedVal === 'object' &&
+					savedVal !== null &&
+					savedVal.hasOwnProperty('value')
+				) {
+					targetData.value = savedVal.value;
+				} else if (
+					savedVal !== undefined &&
+					typeof savedVal !== 'object'
+				) {
+					targetData.value = savedVal;
+				}
+			}
+		}
 	}
 	function _UninstallAddon(id) {
 		if (
@@ -1623,11 +1698,15 @@
 			if (!ADNOPT.hasOwnProperty('value') || isNaN(ADNOPT.value)) {
 				ADNOPT.value = ADNOPT.default;
 			}
+			const step =
+				ADNOPT.type === 'number' && ADNOPT.amount != null
+					? Number(ADNOPT.amount)
+					: 1;
 			if (value == 'down') {
-				ADNOPT.value = Number(ADNOPT.value) - 1;
+				ADNOPT.value = Number(ADNOPT.value) - step;
 				if (MIN > ADNOPT.value) ADNOPT.value = MAX;
 			} else {
-				ADNOPT.value = Number(ADNOPT.value) + 1;
+				ADNOPT.value = Number(ADNOPT.value) + step;
 				if (MAX < ADNOPT.value) ADNOPT.value = MIN;
 			}
 		} else {
@@ -1648,7 +1727,18 @@
 			v = ADNOPT.default;
 		}
 		if (ADNOPT.type == 'list') {
-			return ADNOPT.list[Number(v) - 1];
+			if (!ADNOPT.list || ADNOPT.list.length === 0) return '';
+			const idx = Math.max(
+				0,
+				Math.min(Number(v) - 1, ADNOPT.list.length - 1),
+			);
+			return ADNOPT.list[idx];
+		}
+		if (ADNOPT.type == 'number') {
+			return Number(v);
+		}
+		if (ADNOPT.type == 'boolean') {
+			return Boolean(v);
 		}
 		return v;
 	}
