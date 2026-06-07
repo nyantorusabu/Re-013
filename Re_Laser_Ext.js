@@ -1739,7 +1739,7 @@
 			return Number(v);
 		}
 		if (ADNOPT.type == 'boolean') {
-			return String(Booltrue.includes(v.toLowerCase()));
+			return String(Booltrue.includes(String(v).toLowerCase()));
 		}
 		return v;
 	}
