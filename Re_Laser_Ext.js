@@ -6,32 +6,41 @@
 (async function (Scratch) {
 	'use strict';
 
-	// 変数定義
+	// 変数定義（新しい形式に刷新）
 	const AddonOption = {
 		NYADDON: {
-			System: {
-				ID: {
-					text: 'ユーザーめい',
-					type: 'input',
-					default: 'Guest',
+			text: 'NYADDON',
+			space: {
+				System: {
+					text: 'System',
+					data: {
+						ID: {
+							text: 'ユーザーめい',
+							type: 'input',
+							default: 'Guest',
+						},
+						AutoSync: {
+							text: 'AutoSync',
+							type: 'boolean',
+							default: false,
+						},
+					},
 				},
-				AutoSync: {
-					text: 'AutoSync',
-					type: 'boolean',
-					default: false,
-				},
-			},
-			Touch: {
-				isActive: {
-					text: 'タップそうさ',
-					type: 'boolean',
-					default: navigator.maxTouchPoints > 0,
-				},
-				Type: {
-					text: 'タイプ',
-					type: 'list',
-					list: ['1', '2'],
-					default: '1',
+				Touch: {
+					text: 'Touch',
+					data: {
+						isActive: {
+							text: 'タップそうさ',
+							type: 'boolean',
+							default: navigator.maxTouchPoints > 0,
+						},
+						Type: {
+							text: 'タイプ',
+							type: 'list',
+							list: ['1', '2'],
+							default: '1',
+						},
+					},
 				},
 			},
 		},
@@ -58,6 +67,41 @@
 	NYADDON.SetOption = _SetOption;
 	NYADDON.GetOption = _GetOption;
 
+	function _getDataEntry(id, space, key) {
+		const addon = AddonOption[id];
+		if (!addon) return undefined;
+		const spaceObj =
+			addon.space && addon.space[space]
+				? addon.space[space]
+				: addon[space];
+		if (!spaceObj) return undefined;
+		return spaceObj.data && spaceObj.data[key]
+			? spaceObj.data[key]
+			: spaceObj[key];
+	}
+
+	function _SaveOptionsToLocalStorage() {
+		const saveObj = {};
+		for (const [addonId, addon] of Object.entries(AddonOption)) {
+			saveObj[addonId] = {};
+			const spaces = addon && addon.space ? addon.space : addon;
+			for (const [spaceId, space] of Object.entries(spaces)) {
+				if (spaceId === 'text') continue;
+				saveObj[addonId][spaceId] = {};
+				const datas = space && space.data ? space.data : space;
+				for (const [dataId, data] of Object.entries(datas)) {
+					if (dataId === 'text') continue;
+					if (data && data.hasOwnProperty('value')) {
+						saveObj[addonId][spaceId][dataId] = data.value;
+					} else if (data && data.hasOwnProperty('default')) {
+						saveObj[addonId][spaceId][dataId] = data.default;
+					}
+				}
+			}
+		}
+		localStorage.setItem('re_addon_option', JSON.stringify(saveObj));
+	}
+
 	// ライブラリ読み込みとかその辺の関数
 	async function Extension_Setup() {
 		const loadNDT = () => {
@@ -81,9 +125,15 @@
 				document.body.appendChild(script);
 			});
 		};
+		const loadSDK = async () => {
+			await NDT.VM.extensionManager.loadExtensionURL(
+				'https://nyantorusabu.github.io/Re-013/Addon/NyankoAddonSDK.js',
+			);
+		};
 
 		await loadNDT();
 		await loadfflate();
+		await loadSDK();
 
 		NDT.NEve.Add('FLAG_BEFORE', () => {
 			if (!Loaded) return;
@@ -308,6 +358,12 @@
 							arg('Key', 'S'),
 							arg('POS', 'N'),
 						),
+					),
+					block(
+						'GetNYADDONOptionTextByPos',
+						'R',
+						'アドオン [ID] の [POS] 番目の表示名',
+						args(arg('ID', 'S'), arg('POS', 'N', '1')),
 					),
 					label('スコア'),
 					block(
@@ -546,7 +602,7 @@
 			return Var[args.VarID];
 		}
 		Var_Set(args) {
-			Var[args.VarID] = args.Value;
+			Var[args.Value];
 		}
 		Var_Change(args) {
 			if (isNaN(Var[args.VarID])) {
@@ -700,10 +756,11 @@
 		GetAddonImage(args) {
 			if (args.ID == 'NYADDON')
 				return String(NDT.Spr.Ast.Cos.Export('NYADDON', 'NYADDON'));
-			const ADN = Addons.filter((a) => a.id == args.ID)[0];
-			if (!ADN?.icon)
-				return String(NDT.Spr.Ast.Cos.Export('NYADDON', 'Addon'));
-			return String(_toDataURL(ADN.icon));
+			const costumeName = `addon.${args.ID}`;
+			if (NDT.Spr.Ast.Cos.NameList('NYADDON').includes(costumeName)) {
+				return String(NDT.Spr.Ast.Cos.Export('NYADDON', costumeName));
+			}
+			return String(NDT.Spr.Ast.Cos.Export('NYADDON', 'Addon'));
 		}
 
 		// スコア
@@ -831,38 +888,80 @@
 			localStorage.setItem('re_option', JSON.stringify(Data));
 		}
 		SetNYADDONOption(args) {
-			if (!AddonOption[args.ID]?.[args.Space]?.[args.Key]) return;
+			if (!_getDataEntry(args.ID, args.Space, args.Key)) return;
 			_SetOption(args.ID, args.Space, args.Key, args.Value);
 		}
 		GetNYADDONOptionData(args) {
-			const ADNOPT = AddonOption[args.ID]?.[args.Space]?.[args.Key];
+			const ADNOPT = _getDataEntry(args.ID, args.Space, args.Key);
 			if (!ADNOPT) return;
 			return String(ADNOPT[args.Type]);
 		}
 		GetNYADDONOptionValue(args) {
-			const ADNOPT = AddonOption[args.ID]?.[args.Space]?.[args.Key];
 			return String(_GetOption(args.ID, args.Space, args.Key));
 		}
 		GetNYADDONOptionList(args) {
-			if (!AddonOption[args.ID]?.[args.Space]?.[args.Key]) return;
-			return String(
-				AddonOption[args.ID][args.Space][args.Key].list[args.POS - 1],
-			);
+			const ADNOPT = _getDataEntry(args.ID, args.Space, args.Key);
+			if (!ADNOPT) return;
+			return String(ADNOPT.list[args.POS - 1]);
 		}
 		GetNYADDONOptionlength(args) {
 			let out = AddonOption;
-			if (args.ID !== '') out = out[args.ID];
-			if (args.Space !== '') out = out[args.Space];
-			if (args.Key !== '') out = out[args.Key];
-			if (args.Type !== '') out = out[args.Type];
-			return String(Object.keys(out).length);
+			if (args.ID !== '') {
+				out = out[args.ID];
+			}
+			if (out && args.Space !== '') {
+				out =
+					out.space && out.space[args.Space]
+						? out.space[args.Space]
+						: out[args.Space];
+			}
+			if (out && args.Key !== '') {
+				out =
+					out.data && out.data[args.Key]
+						? out.data[args.Key]
+						: out[args.Key];
+			}
+			if (out && args.Type !== '') {
+				out = out[args.Type];
+			}
+			return String(out ? Object.keys(out).length : 0);
 		}
 		GetNYADDONOptionPos(args) {
 			let out = AddonOption;
-			if (args.ID !== '') out = out[args.ID];
-			if (args.Space !== '') out = out[args.Space];
-			if (args.Key !== '') out = out[args.Key];
-			return String(Object.keys(out)[args.POS - 1]);
+			if (args.ID !== '') {
+				out = out[args.ID];
+			}
+			if (out && args.Space !== '') {
+				out =
+					out.space && out.space[args.Space]
+						? out.space[args.Space]
+						: out[args.Space];
+			}
+			if (out && args.Key !== '') {
+				out =
+					out.data && out.data[args.Key]
+						? out.data[args.Key]
+						: out[args.Key];
+			}
+			return String(out ? Object.keys(out)[args.POS - 1] : '');
+		}
+		GetNYADDONOptionTextByPos(args) {
+			if (args.ID === '') {
+				const keys = Object.keys(AddonOption).filter(
+					(k) => k !== 'text',
+				);
+				const key = keys[args.POS - 1];
+				if (!key) return '';
+				return String(AddonOption[key].text || key);
+			} else {
+				const addon = AddonOption[args.ID];
+				if (!addon) return '';
+				const spaces = addon.space ? addon.space : addon;
+				const keys = Object.keys(spaces).filter((k) => k !== 'text');
+				const key = keys[args.POS - 1];
+				if (!key) return '';
+				return String(spaces[key].text || key);
+			}
 		}
 		async showPrompt(args) {
 			return String(await window.prompt(args.PROMPT));
@@ -999,16 +1098,47 @@
 				const AD = await _InstallAddon(ADURL);
 			}
 		}
+		// 読み込み時互換性を確保した復元処理
 		if (ADOPT) {
 			for (const [addon_id, spaces] of Object.entries(ADOPT)) {
-				for (const [space_id, lists] of Object.entries(spaces)) {
-					for (const [list_id, list] of Object.entries(lists)) {
-						if (
-							AddonOption[addon_id]?.[space_id]?.[list_id] &&
-							list.hasOwnProperty('value')
-						) {
-							AddonOption[addon_id][space_id][list_id].value =
-								list.value;
+				if (addon_id === 'text') continue;
+				const actualSpaces =
+					spaces && spaces.space ? spaces.space : spaces;
+				if (typeof actualSpaces !== 'object' || actualSpaces === null)
+					continue;
+
+				for (const [space_id, datas] of Object.entries(actualSpaces)) {
+					if (space_id === 'text') continue;
+					const actualDatas =
+						datas && datas.data ? datas.data : datas;
+					if (typeof actualDatas !== 'object' || actualDatas === null)
+						continue;
+
+					for (const [list_id, dataVal] of Object.entries(
+						actualDatas,
+					)) {
+						if (list_id === 'text') continue;
+
+						const targetData = _getDataEntry(
+							addon_id,
+							space_id,
+							list_id,
+						);
+						if (targetData) {
+							if (
+								dataVal &&
+								typeof dataVal === 'object' &&
+								dataVal.hasOwnProperty('value')
+							) {
+								// 旧形式の保存データ { value: ... } からの復元
+								targetData.value = dataVal.value;
+							} else if (
+								dataVal !== undefined &&
+								typeof dataVal !== 'object'
+							) {
+								// 新形式の保存データ（値そのもの）からの復元
+								targetData.value = dataVal;
+							}
 						}
 					}
 				}
@@ -1065,6 +1195,155 @@
 	function _toDataURL(U8A) {
 		return `data:application/octet-stream;base64,${U8A.toBase64()}`;
 	}
+
+	async function _LoadSprite(now, stage, getAssetFn) {
+		const LCVarConv = {};
+		const LCVar = now.variables || {};
+		for (const vnow of Object.keys(LCVar)) {
+			const oldId = vnow;
+			const oldName = LCVar[oldId][0];
+			if (oldId.startsWith('Local.')) continue;
+			const newId = `Local.${oldId}`;
+			const newName = `Local.${oldName}`;
+			LCVar[newId] = LCVar[oldId];
+			LCVar[newId][0] = newName;
+			LCVarConv[oldId] = [newId, newName];
+			delete LCVar[oldId];
+		}
+		const LCListConv = {};
+		const LCList = now.lists || {};
+		for (const lnow of Object.keys(LCList)) {
+			const oldId = lnow;
+			const oldName = LCList[oldId][0];
+			if (oldId.startsWith('Local.')) continue;
+			const newId = `Local.${oldId}`;
+			const newName = `Local.${oldName}`;
+			LCList[newId] = LCList[oldId];
+			LCList[newId][0] = newName;
+			LCListConv[oldId] = [newId, newName];
+			delete LCList[oldId];
+		}
+		const Block = now.blocks || {};
+		const sVar = stage ? stage.variables : {};
+		const sList = stage ? stage.lists : {};
+		for (const bnow of Object.keys(Block)) {
+			const bl = Block[bnow];
+			if (Array.isArray(bl) && (bl[0] == 12 || bl[0] == 13)) {
+				const isVar = bl[0] == 12;
+				const name = bl[1];
+				const id = bl[2];
+				const lc = isVar ? LCVarConv[id] : LCListConv;
+				if (lc) {
+					bl[2] = lc[0];
+					bl[1] = lc[1];
+				} else {
+					const mv = (isVar ? NDT.Var.All() : NDT.List.All()).find(
+						(v) => v.name == name,
+					);
+					if (mv) {
+						if (mv.id !== id) bl[2] = mv.id;
+					} else {
+						const nVar = isVar ? sVar : sList;
+						const nLC = isVar ? LCVar : LCList;
+						const nLConv = isVar ? LCVarConv : LCListConv;
+						if (nVar && nVar.hasOwnProperty(id)) {
+							const newId = `Global.${id}`;
+							const newName = `Global.${name}`;
+							bl[2] = newId;
+							bl[1] = newName;
+							nLC[newId] = nVar[id];
+							nLC[newId][0] = newName;
+							nLConv[id] = [newId, newName];
+						}
+					}
+				}
+			}
+			if (bl.opcode && bl.opcode.startsWith('data_')) {
+				const isVar = bl.fields.hasOwnProperty('VARIABLE');
+				const fv = isVar ? bl.fields.VARIABLE : bl.fields.LIST;
+				const name = fv[0];
+				const id = fv[1];
+				const lc = isVar ? LCVarConv[id] : LCListConv[id];
+				if (lc) {
+					fv[1] = lc[0];
+					fv[0] = lc[1];
+				} else {
+					const mv = (isVar ? NDT.Var.All() : NDT.List.All()).find(
+						(v) => v.name == name,
+					);
+					if (mv) {
+						if (mv.id !== id) fv[1] = mv.id;
+					} else {
+						const nVar = isVar ? sVar : sList;
+						const nLC = isVar ? LCVar : LCList;
+						const nLConv = isVar ? LCVarConv : LCListConv;
+						if (nVar && nVar.hasOwnProperty(id)) {
+							const newId = `Global.${id}`;
+							const newName = `Global.${name}`;
+							fv[1] = newId;
+							fv[0] = newName;
+							nLC[newId] = nVar[id];
+							nLC[newId][0] = newName;
+							nLConv[id] = [newId, newName];
+						}
+					}
+				}
+			}
+			const input = bl.inputs || {};
+			for (const inow of Object.keys(input)) {
+				const ivar = input[inow][1];
+				if (!ivar) continue;
+				const isVar = ivar[0] == 12;
+				if (!(Array.isArray(ivar) && (isVar || ivar[0] == 13))) {
+					continue;
+				}
+				const name = ivar[1];
+				const id = ivar[2];
+				const lc = isVar ? LCVarConv[id] : LCListConv[id];
+				if (lc) {
+					ivar[2] = lc[0];
+					ivar[1] = lc[1];
+				} else {
+					const mv = (isVar ? NDT.Var.All() : NDT.List.All).find(
+						(v) => v.name == name,
+					);
+					if (mv) {
+						if (mv.id !== id) ivar[2] = mv.id;
+					} else {
+						const nVar = isVar ? sVar : sList;
+						const nLC = isVar ? LCVar : LCList;
+						const nLConv = isVar ? LCVarConv : LCListConv;
+						if (nVar && nVar.hasOwnProperty(id)) {
+							const newId = `Global.${id}`;
+							const newName = `Global.${name}`;
+							ivar[2] = newId;
+							ivar[1] = newName;
+							nLC[newId] = nVar[id];
+							nLC[newId][0] = newName;
+							nLConv[id] = [newId, newName];
+						}
+					}
+				}
+			}
+		}
+		const SPZip = {
+			'sprite.json': fflate.strToU8(JSON.stringify(now)),
+		};
+		for (const tnow of now.costumes || []) {
+			SPZip[tnow.md5ext] = await getAssetFn(tnow.md5ext);
+		}
+		for (const tnow of now.sounds || []) {
+			SPZip[tnow.md5ext] = await getAssetFn(tnow.md5ext);
+		}
+		return await NDT.Spr.Add(
+			_toDataURL(
+				fflate.zipSync(SPZip, {
+					level: 0,
+				}),
+			),
+		);
+	}
+
 	// 譜面をインポートする関数
 	async function _ImportChart(MODE = 'sc', SRC) {
 		function getVar(target) {
@@ -1196,180 +1475,24 @@
 					}
 				}
 				if (!install) continue;
-				const LCVarConv = {};
-				const LCVar = now.variables;
-				for (const vnow of Object.keys(LCVar)) {
-					const oldId = vnow;
-					const oldName = LCVar[oldId][0];
-					if (oldId.startsWith('Local.')) continue;
-					const newId = `Local.${oldId}`;
-					const newName = `Local.${oldName}`;
-					LCVar[newId] = LCVar[oldId];
-					LCVar[newId][0] = newName;
-					LCVarConv[oldId] = [newId, newName];
-					delete LCVar[oldId];
-				}
-				const LCListConv = {};
-				const LCList = now.lists;
-				for (const lnow of Object.keys(LCList)) {
-					const oldId = lnow;
-					const oldName = LCList[oldId][0];
-					if (oldId.startsWith('Local.')) continue;
-					const newId = `Local.${oldId}`;
-					const newName = `Local.${oldName}`;
-					LCList[newId] = LCList[oldId];
-					LCList[newId][0] = newName;
-					LCListConv[oldId] = [newId, newName];
-					delete LCList[oldId];
-				}
-				const Block = now.blocks;
-				const sVar = stage.variables;
-				const sList = stage.lists;
-				for (const bnow of Object.keys(Block)) {
-					const bl = Block[bnow];
-					if (Array.isArray(bl) && (bl[0] == 12 || bl[0] == 13)) {
-						const isVar = bl[0] == 12;
-						const name = bl[1];
-						const id = bl[2];
-						const lc = isVar ? LCVarConv[id] : LCListConv;
-						if (lc) {
-							bl[2] = lc[0];
-							bl[1] = lc[1];
-						} else {
-							const mv = (
-								isVar ? NDT.Var.All() : NDT.List.All()
-							).find((v) => v.name == name);
-							if (mv) {
-								if (mv.id !== id) bl[2] = mv.id;
-							} else {
-								const nVar = isVar ? sVar : sList;
-								const nLC = isVar ? LCVar : LCList;
-								const nLConv = isVar ? LCVarConv : LCListConv;
-								if (nVar.hasOwnProperty(id)) {
-									const newId = `Global.${id}`;
-									const newName = `Global.${name}`;
-									bl[2] = newId;
-									bl[1] = newName;
-									nLC[newId] = nVar[id];
-									nLC[newId][0] = newName;
-									nLConv[id] = [newId, newName];
-								}
-							}
-						}
+
+				const getAssetFn = async (md5ext) => {
+					if (Mode == 'zip' && Object.keys(PJZip).includes(md5ext)) {
+						return PJZip[md5ext];
+					} else {
+						const url = `https://assets.scratch.mit.edu/internalapi/asset/${md5ext}/get`;
+						const res = await fetch(url);
+						const data = await res.arrayBuffer();
+						return new Uint8Array(data);
 					}
-					if (bl.opcode.startsWith('data_')) {
-						const isVar = bl.fields.hasOwnProperty('VARIABLE');
-						const fv = isVar ? bl.fields.VARIABLE : bl.fields.LIST;
-						const name = fv[0];
-						const id = fv[1];
-						const lc = isVar ? LCVarConv[id] : LCListConv[id];
-						if (lc) {
-							fv[1] = lc[0];
-							fv[0] = lc[1];
-						} else {
-							const mv = (
-								isVar ? NDT.Var.All() : NDT.List.All()
-							).find((v) => v.name == name);
-							if (mv) {
-								if (mv.id !== id) fv[1] = mv.id;
-							} else {
-								const nVar = isVar ? sVar : sList;
-								const nLC = isVar ? LCVar : LCList;
-								const nLConv = isVar ? LCVarConv : LCListConv;
-								if (nVar.hasOwnProperty(id)) {
-									const newId = `Global.${id}`;
-									const newName = `Global.${name}`;
-									fv[1] = newId;
-									fv[0] = newName;
-									nLC[newId] = nVar[id];
-									nLC[newId][0] = newName;
-									nLConv[id] = [newId, newName];
-								}
-							}
-						}
-					}
-					const input = bl.inputs;
-					for (const inow of Object.keys(input)) {
-						const ivar = input[inow][1];
-						const isVar = ivar[0] == 12;
-						if (
-							!(Array.isArray(ivar) && (isVar || ivar[0] == 13))
-						) {
-							continue;
-						}
-						const name = ivar[1];
-						const id = ivar[2];
-						const lc = isVar ? LCVarConv[id] : LCListConv[id];
-						if (lc) {
-							ivar[2] = lc[0];
-							ivar[1] = lc[1];
-						} else {
-							const mv = (
-								isVar ? NDT.Var.All() : NDT.List.All
-							).find((v) => v.name == name);
-							if (mv) {
-								if (mv.id !== id) ivar[2] = mv.id;
-							} else {
-								const nVar = isVar ? sVar : sList;
-								const nLC = isVar ? LCVar : LCList;
-								const nLConv = isVar ? LCVarConv : LCListConv;
-								if (nVar.hasOwnProperty(id)) {
-									const newId = `Global.${id}`;
-									const newName = `Global.${name}`;
-									ivar[2] = newId;
-									ivar[1] = newName;
-									nLC[newId] = nVar[id];
-									nLC[newId][0] = newName;
-									nLConv[id] = [newId, newName];
-								}
-							}
-						}
-					}
-				}
-				const SPZip = {
-					'sprite.json': fflate.strToU8(JSON.stringify(now)),
 				};
-				for (const tnow of now.costumes) {
-					let url;
-					if (
-						Mode == 'zip' &&
-						Object.keys(PJZip).includes(tnow.md5ext)
-					) {
-						url = _toDataURL(PJZip[tnow.md5ext]);
-					} else {
-						url = `https://assets.scratch.mit.edu/internalapi/asset/${tnow.md5ext}/get`;
-					}
-					const res = await fetch(url);
-					const data = await res.arrayBuffer();
-					const U8A = new Uint8Array(data);
-					SPZip[tnow.md5ext] = U8A;
-				}
-				for (const tnow of now.sounds) {
-					let url;
-					if (
-						Mode == 'zip' &&
-						Object.keys(PJZip).includes(tnow.md5ext)
-					) {
-						url = _toDataURL(PJZip[tnow.md5ext]);
-					} else {
-						url = `https://assets.scratch.mit.edu/internalapi/asset/${tnow.md5ext}/get`;
-					}
-					const res = await fetch(url);
-					const data = await res.arrayBuffer();
-					const U8A = new Uint8Array(data);
-					SPZip[tnow.md5ext] = U8A;
-				}
-				const ModTarget = await NDT.Spr.Add(
-					_toDataURL(
-						fflate.zipSync(SPZip, {
-							level: 0,
-						}),
-					),
-				);
+
+				const ModTarget = await _LoadSprite(now, stage, getAssetFn);
 				MOD.sprite = ModTarget.id;
 			}
 		}
 	}
+
 	// アドオンをインストールする関数
 	async function _InstallAddon(url) {
 		const res = await fetch(url);
@@ -1377,7 +1500,6 @@
 		const AD = new Uint8Array(data);
 		const ADZip = fflate.unzipSync(AD);
 		const MFest = JSON.parse(fflate.strFromU8(ADZip['manifest.json']));
-		const SPURL = _toDataURL(ADZip['sprite.sprite3']);
 		if (Object.keys(AddonSprite).includes(MFest.id)) {
 			if (
 				MFest.version ==
@@ -1387,7 +1509,13 @@
 			NDT.Spr.Delete(AddonSprite[MFest.id]);
 		}
 
-		const target = await NDT.Spr.Add(SPURL);
+		const SPSync = fflate.unzipSync(ADZip['sprite.sprite3']);
+		const spriteJson = JSON.parse(fflate.strFromU8(SPSync['sprite.json']));
+		const getAssetFn = async (md5ext) => {
+			return SPSync[md5ext];
+		};
+
+		const target = await _LoadSprite(spriteJson, null, getAssetFn);
 		AddonSprite[MFest.id] = target.id;
 		const render = Object.values(target.blocks._blocks).filter(
 			(b) =>
@@ -1397,32 +1525,70 @@
 		if (render) {
 			MFest.reload = true;
 		}
-		if (Object.keys(ADZip).filter((a) => a.startsWith('icon.'))[0]) {
-			MFest.icon = Object.entries(ADZip).filter(
-				(a) => a[0].startsWith('icon.')[0][1],
-			);
+		if (typeof MFest.icon === 'string' && MFest.icon !== '') {
+			const iconPath = MFest.icon;
+			const iconData = ADZip[iconPath];
+			if (
+				iconData &&
+				!NDT.Spr.Ast.Cos.NameList('NYADDON').includes(
+					`addon.${MFest.id}`,
+				)
+			) {
+				const ext = iconPath.split('.').pop().toLowerCase();
+				let iconDataURL;
+				if (ext === 'svg') {
+					iconDataURL = `data:image/svg+xml;base64,${iconData.toBase64()}`;
+				} else if (ext === 'png') {
+					iconDataURL = `data:image/png;base64,${iconData.toBase64()}`;
+				}
+				if (iconDataURL) {
+					await NDT.Spr.Ast.Cos.Add(
+						'NYADDON',
+						`addon.${MFest.id}`,
+						iconDataURL,
+					);
+				}
+			}
 		}
+		// 新形式に対応した option.json パース処理（旧構造の自動フォールバック付き）
 		if (Object.keys(ADZip).filter((a) => a == 'option.json')[0]) {
 			const ADOPT = JSON.parse(fflate.strFromU8(ADZip['option.json']));
-			if (!AddonOption[MFest.id]) AddonOption[MFest.id] = {};
-			for (const [space_id, lists] of Object.entries(ADOPT)) {
-				if (!AddonOption[MFest.id][space_id])
-					AddonOption[MFest.id][space_id] = {};
-				for (const [list_id, list] of Object.entries(lists)) {
-					if (!AddonOption[MFest.id][space_id][list_id])
-						AddonOption[MFest.id][space_id][list_id] = {};
-					const List = AddonOption[MFest.id][space_id][list_id];
+			if (!AddonOption[MFest.id]) AddonOption[MFest.id] = { space: {} };
+
+			const hasSpaceProp = ADOPT.hasOwnProperty('space');
+			if (ADOPT.text) AddonOption[MFest.id].text = ADOPT.text;
+
+			const spaces = hasSpaceProp ? ADOPT.space : ADOPT;
+
+			for (const [space_id, spaceContent] of Object.entries(spaces)) {
+				if (space_id === 'text' && !hasSpaceProp) continue;
+
+				if (!AddonOption[MFest.id].space)
+					AddonOption[MFest.id].space = {};
+				if (!AddonOption[MFest.id].space[space_id]) {
+					AddonOption[MFest.id].space[space_id] = { data: {} };
+				}
+				const currentSpace = AddonOption[MFest.id].space[space_id];
+
+				const hasDataProp =
+					spaceContent && spaceContent.hasOwnProperty('data');
+				if (spaceContent && spaceContent.text)
+					currentSpace.text = spaceContent.text;
+
+				const datas = hasDataProp ? spaceContent.data : spaceContent;
+				if (typeof datas !== 'object' || datas === null) continue;
+
+				for (const [list_id, list] of Object.entries(datas)) {
+					if (list_id === 'text' && !hasDataProp) continue;
+
+					if (!currentSpace.data) currentSpace.data = {};
+					if (!currentSpace.data[list_id])
+						currentSpace.data[list_id] = {};
+					const List = currentSpace.data[list_id];
+
 					List.type = list.type;
-					if (list.text) {
-						List.text = list.text;
-					} else {
-						List.text = String(list_id);
-					}
-					if (list.default) {
-						List.default = list.default;
-					} else {
-						List.default = '1';
-					}
+					List.text = list.text || String(list_id);
+					List.default = list.default || '1';
 					if (list.type == 'list') List.list = list.list;
 					if (list.type == 'number') List.amount = list.amount;
 				}
@@ -1443,9 +1609,9 @@
 		delete AddonSprite[id];
 	}
 	function _SetOption(id, space, key, value) {
-		const ADNOPT = AddonOption[id]?.[space]?.[key];
+		const ADNOPT = _getDataEntry(id, space, key);
 		if (!ADNOPT) {
-			Log('e', `オプション"${id}.${space}.${key}"は存在しません`);
+			log('e', `オプション"${id}.${space}.${key}"は存在しません`);
 			return;
 		}
 		if (
@@ -1467,12 +1633,12 @@
 		} else {
 			ADNOPT.value = value;
 		}
-		localStorage.setItem('re_addon_option', JSON.stringify(AddonOption));
+		_SaveOptionsToLocalStorage();
 	}
 	function _GetOption(id, space, key) {
-		const ADNOPT = AddonOption[id]?.[space]?.[key];
+		const ADNOPT = _getDataEntry(id, space, key);
 		if (!ADNOPT) {
-			Log('e', `オプション"${id}.${space}.${key}"は存在しません`);
+			log('e', `オプション"${id}.${space}.${key}"は存在しません`);
 			return;
 		}
 		let v;

@@ -54,6 +54,8 @@
 					label('@manifest'),
 					button('@manifestを生成', 'GenerateMFest'),
 					button('@manifestを編集', 'EditMFest'),
+					label('OPTION'),
+					button('OPTIONを編集', 'EditOption'),
 					'---',
 					label('ブロック'),
 					label('取得'),
@@ -62,6 +64,15 @@
 						'R',
 						'RLVar [ID]',
 						arg('ID', 'S', 'GMain'),
+					),
+					block(
+						'GetOption',
+						'R',
+						'option [SpaceID] [DataID]',
+						args(
+							arg('SpaceID', 'S', 'Setting'),
+							arg('DataID', 'S', 'Volume'),
+						),
 					),
 				),
 				{
@@ -87,15 +98,45 @@
 			if (!Object.keys(RLVarList).includes(ID)) return '';
 			return RLVarList[ID];
 		}
+		GetOption(args) {
+			const target = NDT.Spr.Editing;
+			if (!target || !target.mfest || !target.mfest.option) return '';
+			const spaceID = args.SpaceID;
+			const dataID = args.DataID;
+			if (!target.mfest.option[spaceID]) return '';
+
+			const dataObj = target.mfest.option[spaceID][dataID];
+			if (dataObj === undefined) return '';
+
+			// 新しい構造 { text, type, value } の場合は .value を返す
+			if (
+				dataObj !== null &&
+				typeof dataObj === 'object' &&
+				'value' in dataObj
+			) {
+				return dataObj.value;
+			}
+			// 旧データ互換用フォールバック
+			return dataObj;
+		}
 		async CreateAddon() {
+			const res = await _PromptManifest('外部アドオンを新規作成', {
+				name: '',
+				description: '',
+				author: '',
+				version: '1.0.0',
+			});
+			if (!res) return; // キャンセルされた場合
+
 			const mfest = {
 				id: crypto.randomUUID(),
-				name: window.prompt('アドオンの名前を入力'),
-				description: window.prompt('アドオンの説明を入力'),
-				author: window.prompt('あなたのニックネームを入力'),
-				version: '1.0.0',
+				name: res.name,
+				description: res.description,
+				author: res.author,
+				version: res.version,
 				sdk: 'NYADDONSDK',
 				sdk_ver: SDK_VER,
+				option: {},
 			};
 			const Spr = await NDT.Spr.Add(
 				'https://nyantorusabu.github.io/Re-013/Asset/NASDK/Template.sprite3',
@@ -137,25 +178,77 @@
 			const SP = JSON.parse(fflate.strFromU8(SPZip['sprite.json']));
 			_V1ToV2((await NDT.Spr.Add(URL)).id);
 		}
-		GenerateMFest() {
+		async GenerateMFest() {
 			const target = NDT.Spr.Editing;
+			if (!target) return;
 			if (Object.keys(target).includes('mfest')) {
 				window.alert('既に@manifestが存在します');
 				return;
 			}
+
+			const res = await _PromptManifest('@manifestを生成', {
+				name: target.getName(),
+				description: '',
+				author: '',
+				version: '1.0.0',
+			});
+			if (!res) return;
+
 			const mfest = {
 				id: crypto.randomUUID(),
-				name: target.getName(),
-				description: window.prompt('アドオンの説明を入力'),
-				author: window.prompt('あなたのニックネームを入力'),
-				version: '1.0.0',
+				name: res.name,
+				description: res.description,
+				author: res.author,
+				version: res.version,
 				sdk: 'NYADDONSDK',
 				sdk_ver: SDK_VER,
+				option: {},
 			};
 			target.mfest = mfest;
+			NDT.Spr.Rename(target.id, mfest.name);
 			window.alert(`@manifestを生成しました`);
 		}
-		EditMFest() {}
+		async EditMFest() {
+			const target = NDT.Spr.Editing;
+			if (!target || !target.mfest) {
+				window.alert(
+					'@manifestが存在しません。先に生成または作成してください。',
+				);
+				return;
+			}
+
+			const res = await _PromptManifest('@manifestを編集', target.mfest);
+			if (!res) return;
+
+			target.mfest.name = res.name;
+			target.mfest.description = res.description;
+			target.mfest.author = res.author;
+			target.mfest.version = res.version;
+
+			NDT.Spr.Rename(target.id, target.mfest.name);
+			window.alert(`@manifestを編集・更新しました`);
+		}
+		async EditOption() {
+			const target = NDT.Spr.Editing;
+			if (!target || !target.mfest) {
+				window.alert(
+					'@manifestが存在しません。先に生成または作成してください。',
+				);
+				return;
+			}
+			if (!target.mfest.option) {
+				target.mfest.option = {};
+			}
+
+			const res = await _PromptOption(
+				'OPTIONを編集',
+				target.mfest.option,
+			);
+			if (!res) return;
+
+			target.mfest.option = res;
+			window.alert(`OPTIONを編集・更新しました`);
+		}
 	}
 
 	function _V1ToV2(SprID) {
@@ -250,6 +343,792 @@
 		NDT.Spr.Get(Spr.id).mfest = JSON.parse(
 			fflate.strFromU8(ADZip['manifest.json']),
 		);
+	}
+
+	// @manifest制作用のシンプルモーダルUI
+	function _PromptManifest(titleText, initialData) {
+		return new Promise((resolve) => {
+			// 古いモーダルが残っていれば削除
+			const oldModal = document.getElementById('nasdk-manifest-modal');
+			if (oldModal) oldModal.remove();
+
+			// 背景レイヤー
+			const backdrop = document.createElement('div');
+			backdrop.id = 'nasdk-manifest-modal';
+			backdrop.style =
+				'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.4);display:flex;justify-content:center;align-items:center;z-index:999999;font-family:sans-serif;';
+
+			// モーダル本体
+			const modal = document.createElement('div');
+			modal.style =
+				'background:white;padding:20px;border-radius:8px;width:320px;box-shadow:0 4px 12px rgba(0,0,0,0.15);color:#333;';
+
+			// タイトル
+			const title = document.createElement('h3');
+			title.innerText = titleText;
+			title.style.margin = '0 0 15px 0';
+			title.style.fontSize = '16px';
+			title.style.borderBottom = '1px solid #eee';
+			title.style.paddingBottom = '8px';
+			modal.appendChild(title);
+
+			// 入力フィールドの構造定義
+			const fields = [
+				{
+					label: 'アドオンの名前',
+					key: 'name',
+					value: initialData.name || '',
+				},
+				{
+					label: 'アドオンの説明',
+					key: 'description',
+					value: initialData.description || '',
+				},
+				{
+					label: 'あなたのニックネーム',
+					key: 'author',
+					value: initialData.author || '',
+				},
+				{
+					label: 'バージョン',
+					key: 'version',
+					value: initialData.version || '1.0.0',
+				},
+			];
+
+			const inputs = {};
+			for (const f of fields) {
+				const container = document.createElement('div');
+				container.style.marginBottom = '12px';
+				const lbl = document.createElement('label');
+				lbl.innerText = f.label;
+				lbl.style.display = 'block';
+				lbl.style.fontSize = '12px';
+				lbl.style.marginBottom = '4px';
+				lbl.style.color = '#555';
+				lbl.style.fontWeight = 'bold';
+
+				const input = document.createElement('input');
+				input.type = 'text';
+				input.value = f.value;
+				input.style.width = '100%';
+				input.style.boxSizing = 'border-box';
+				input.style.padding = '6px 8px';
+				input.style.border = '1px solid #ccc';
+				input.style.borderRadius = '4px';
+				input.style.fontSize = '14px';
+
+				container.appendChild(lbl);
+				container.appendChild(input);
+				modal.appendChild(container);
+				inputs[f.key] = input;
+			}
+
+			// ボタンコンテナ
+			const btnContainer = document.createElement('div');
+			btnContainer.style.display = 'flex';
+			btnContainer.style.justifyContent = 'flex-end';
+			btnContainer.style.gap = '10px';
+			btnContainer.style.marginTop = '15px';
+
+			// キャンセルボタン
+			const cancelBtn = document.createElement('button');
+			cancelBtn.innerText = 'キャンセル';
+			cancelBtn.style.padding = '6px 12px';
+			cancelBtn.style.border = '1px solid #ccc';
+			cancelBtn.style.borderRadius = '4px';
+			cancelBtn.style.background = '#fff';
+			cancelBtn.style.cursor = 'pointer';
+			cancelBtn.style.fontSize = '13px';
+			cancelBtn.onclick = () => {
+				backdrop.remove();
+				resolve(null);
+			};
+
+			// 確定ボタン
+			const saveBtn = document.createElement('button');
+			saveBtn.innerText = '確定';
+			saveBtn.style.padding = '6px 12px';
+			saveBtn.style.background = '#ff8a54'; // NASDKのテーマカラーに追従
+			saveBtn.style.color = 'white';
+			saveBtn.style.border = 'none';
+			saveBtn.style.borderRadius = '4px';
+			saveBtn.style.cursor = 'pointer';
+			saveBtn.style.fontSize = '13px';
+			saveBtn.onclick = () => {
+				const result = {};
+				for (const key in inputs) {
+					result[key] = inputs[key].value;
+				}
+				backdrop.remove();
+				resolve(result);
+			};
+
+			btnContainer.appendChild(cancelBtn);
+			btnContainer.appendChild(saveBtn);
+			modal.appendChild(btnContainer);
+			backdrop.appendChild(modal);
+			document.body.appendChild(backdrop);
+		});
+	}
+
+	// OPTION制作用のシンプルモーダルUI (タブ切り替え・インライン管理版)
+	function _PromptOption(titleText, initialData) {
+		return new Promise((resolve) => {
+			const oldModal = document.getElementById('nasdk-option-modal');
+			if (oldModal) oldModal.remove();
+
+			const backdrop = document.createElement('div');
+			backdrop.id = 'nasdk-option-modal';
+			backdrop.style =
+				'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.4);display:flex;justify-content:center;align-items:center;z-index:999999;font-family:sans-serif;';
+
+			const modal = document.createElement('div');
+			modal.style =
+				'background:white;padding:20px;border-radius:8px;width:800px;height:80%;max-height:85%;display:flex;flex-direction:column;box-shadow:0 4px 12px rgba(0,0,0,0.15);color:#333;';
+
+			const title = document.createElement('h3');
+			title.innerText = titleText;
+			title.style.margin = '0 0 15px 0';
+			title.style.fontSize = '16px';
+			title.style.borderBottom = '1px solid #eee';
+			title.style.paddingBottom = '8px';
+			modal.appendChild(title);
+
+			// データ管理用の内部状態オブジェクト
+			const spacesData = {};
+
+			// 初期データのマッピング
+			if (initialData && typeof initialData === 'object') {
+				for (const spaceID in initialData) {
+					if (
+						Object.prototype.hasOwnProperty.call(
+							initialData,
+							spaceID,
+						)
+					) {
+						const spaceObj = initialData[spaceID];
+						if (spaceObj && typeof spaceObj === 'object') {
+							spacesData[spaceID] = {
+								text: spaceObj._space_text || spaceID,
+								datas: [],
+							};
+							for (const dataID in spaceObj) {
+								if (dataID === '_space_text') continue;
+								if (
+									Object.prototype.hasOwnProperty.call(
+										spaceObj,
+										dataID,
+									)
+								) {
+									const item = spaceObj[dataID];
+									if (
+										item &&
+										typeof item === 'object' &&
+										'value' in item
+									) {
+										spacesData[spaceID].datas.push({
+											id: dataID,
+											text: item.text || '',
+											type: item.type || 'text',
+											value: item.value,
+											min:
+												item.min !== undefined
+													? item.min
+													: '',
+											max:
+												item.max !== undefined
+													? item.max
+													: '',
+										});
+									} else {
+										const guessedType = Array.isArray(item)
+											? 'list'
+											: typeof item === 'number'
+												? 'number'
+												: typeof item === 'boolean'
+													? 'boolean'
+													: 'text';
+										spacesData[spaceID].datas.push({
+											id: dataID,
+											text: '',
+											type: guessedType,
+											value: item,
+											min: '',
+											max: '',
+										});
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+
+			// データが完全に空の場合のデフォルト初期値
+			if (Object.keys(spacesData).length === 0) {
+				spacesData['Setting'] = {
+					text: '設定',
+					datas: [
+						{
+							id: 'Volume',
+							text: '音量',
+							type: 'number',
+							value: 100,
+							min: 0,
+							max: 100,
+						},
+					],
+				};
+			}
+
+			// 現在選択されているSpaceIDの管理
+			let currentSpaceId = Object.keys(spacesData)[0];
+
+			// --- タブ切り替え用のUI定義 ---
+			const tabContainer = document.createElement('div');
+			tabContainer.style =
+				'display:flex; gap:5px; margin-bottom:15px; border-bottom:1px solid #ccc; padding-bottom:5px;';
+			modal.appendChild(tabContainer);
+
+			const spaceTabBtn = document.createElement('button');
+			spaceTabBtn.innerText = 'Space設定';
+			spaceTabBtn.type = 'button';
+			const dataTabBtn = document.createElement('button');
+			dataTabBtn.innerText = 'データ設定';
+			dataTabBtn.type = 'button';
+
+			const tabBtnStyle =
+				'padding:6px 12px; border:1px solid #ccc; border-bottom:none; border-radius:4px 4px 0 0; cursor:pointer; font-size:13px; background:#f0f0f0; outline:none;';
+			spaceTabBtn.style = tabBtnStyle;
+			dataTabBtn.style = tabBtnStyle;
+
+			tabContainer.appendChild(spaceTabBtn);
+			tabContainer.appendChild(dataTabBtn);
+
+			// 各タブのメインコンテナ
+			const spaceTabContent = document.createElement('div');
+			spaceTabContent.style =
+				'flex:1; display:none; flex-direction:column; overflow:hidden;';
+			const dataTabContent = document.createElement('div');
+			dataTabContent.style =
+				'flex:1; display:none; flex-direction:column; overflow:hidden;';
+
+			modal.appendChild(spaceTabContent);
+			modal.appendChild(dataTabContent);
+
+			function setTab(tab) {
+				if (tab === 'space') {
+					spaceTabContent.style.display = 'flex';
+					dataTabContent.style.display = 'none';
+					spaceTabBtn.style.background = '#fff';
+					spaceTabBtn.style.fontWeight = 'bold';
+					spaceTabBtn.style.borderBottom = '1px solid #fff';
+					spaceTabBtn.style.marginBottom = '-1px';
+					dataTabBtn.style.background = '#f0f0f0';
+					dataTabBtn.style.fontWeight = 'normal';
+					dataTabBtn.style.borderBottom = '1px solid #ccc';
+					dataTabBtn.style.marginBottom = '0';
+					renderSpaceRows();
+				} else {
+					spaceTabContent.style.display = 'none';
+					dataTabContent.style.display = 'flex';
+					dataTabBtn.style.background = '#fff';
+					dataTabBtn.style.fontWeight = 'bold';
+					dataTabBtn.style.borderBottom = '1px solid #fff';
+					dataTabBtn.style.marginBottom = '-1px';
+					spaceTabBtn.style.background = '#f0f0f0';
+					spaceTabBtn.style.fontWeight = 'normal';
+					spaceTabBtn.style.borderBottom = '1px solid #ccc';
+					spaceTabBtn.style.marginBottom = '0';
+					updateSpaceSelectOptions();
+					renderDataRows();
+				}
+			}
+
+			spaceTabBtn.onclick = () => setTab('space');
+			dataTabBtn.onclick = () => setTab('data');
+
+			const spaceAddForm = document.createElement('div');
+			spaceAddForm.style =
+				'display:flex; gap:8px; align-items:center; background:#f9f9f9; padding:10px; border-radius:6px; border:1px solid #e0e0e0; margin-bottom:15px;';
+
+			const newSpaceIdInput = document.createElement('input');
+			newSpaceIdInput.type = 'text';
+			newSpaceIdInput.placeholder = 'SpaceID';
+			newSpaceIdInput.style =
+				'padding:6px; border:1px solid #ccc; border-radius:4px; font-size:13px; flex:1;';
+
+			const newSpaceTextInput = document.createElement('input');
+			newSpaceTextInput.type = 'text';
+			newSpaceTextInput.placeholder = '表示名';
+			newSpaceTextInput.style =
+				'padding:6px; border:1px solid #ccc; border-radius:4px; font-size:13px; flex:1;';
+
+			const doAddSpaceBtn = document.createElement('button');
+			doAddSpaceBtn.innerText = 'Spaceを追加';
+			doAddSpaceBtn.style =
+				'padding:6px 12px; background:#5cb85c; color:white; border:none; border-radius:4px; cursor:pointer; font-size:13px;';
+
+			doAddSpaceBtn.onclick = () => {
+				const id = newSpaceIdInput.value.trim();
+				const text = newSpaceTextInput.value.trim();
+				if (!id) {
+					window.alert('SpaceIDを入力してください。');
+					return;
+				}
+				if (spacesData[id]) {
+					window.alert('そのSpaceIDは既に存在します。');
+					return;
+				}
+				spacesData[id] = {
+					text: text || id,
+					datas: [],
+				};
+				newSpaceIdInput.value = '';
+				newSpaceTextInput.value = '';
+				renderSpaceRows();
+			};
+
+			spaceAddForm.appendChild(newSpaceIdInput);
+			spaceAddForm.appendChild(newSpaceTextInput);
+			spaceAddForm.appendChild(doAddSpaceBtn);
+			spaceTabContent.appendChild(spaceAddForm);
+
+			// 既存のSpace編集一覧
+			const spaceListContainer = document.createElement('div');
+			spaceListContainer.style =
+				'flex:1; overflow-y:auto; padding-right:5px;';
+			spaceTabContent.appendChild(spaceListContainer);
+
+			const spaceHeader = document.createElement('div');
+			spaceHeader.style =
+				'display:flex; gap:5px; margin-bottom:8px; font-size:12px; font-weight:bold; color:#555; border-bottom:1px solid #eee; padding-bottom:4px; position:sticky; top:0; background:white;';
+			spaceHeader.innerHTML =
+				'<span style="flex:1;">SpaceID</span><span style="flex:1;">表示名</span><span style="width:60px;">操作</span>';
+			spaceListContainer.appendChild(spaceHeader);
+
+			const spaceRowsContainer = document.createElement('div');
+			spaceListContainer.appendChild(spaceRowsContainer);
+
+			function renderSpaceRows() {
+				spaceRowsContainer.innerHTML = '';
+				for (const spaceId in spacesData) {
+					const row = document.createElement('div');
+					row.style =
+						'display:flex; gap:5px; margin-bottom:8px; align-items:center;';
+
+					// SpaceID入力欄
+					const idInput = document.createElement('input');
+					idInput.type = 'text';
+					idInput.value = spaceId;
+					idInput.style =
+						'flex:1; padding:6px; border:1px solid #ccc; border-radius:4px; font-size:13px;';
+
+					let oldId = spaceId;
+					idInput.onchange = () => {
+						const newId = idInput.value.trim();
+						if (!newId) {
+							window.alert('SpaceIDを空にすることはできません。');
+							idInput.value = oldId;
+							return;
+						}
+						if (newId !== oldId && spacesData[newId]) {
+							window.alert('そのSpaceIDは既に存在します。');
+							idInput.value = oldId;
+							return;
+						}
+						if (newId !== oldId) {
+							spacesData[newId] = spacesData[oldId];
+							delete spacesData[oldId];
+							if (currentSpaceId === oldId) {
+								currentSpaceId = newId;
+							}
+							oldId = newId;
+							renderSpaceRows();
+						}
+					};
+
+					// 表示名入力欄
+					const textInput = document.createElement('input');
+					textInput.type = 'text';
+					textInput.value = spacesData[spaceId].text || '';
+					textInput.style =
+						'flex:1; padding:6px; border:1px solid #ccc; border-radius:4px; font-size:13px;';
+					textInput.oninput = () => {
+						spacesData[spaceId].text = textInput.value.trim();
+					};
+
+					// 削除ボタン
+					const delBtn = document.createElement('button');
+					delBtn.innerText = '削除';
+					delBtn.style =
+						'width:60px; padding:6px; background:#ff4d4d; color:white; border:none; border-radius:4px; cursor:pointer; font-size:12px;';
+					delBtn.onclick = () => {
+						if (Object.keys(spacesData).length <= 1) {
+							window.alert(
+								'これ以上Spaceを削除できません。最小1つのSpaceが必要です。',
+							);
+							return;
+						}
+						if (
+							!window.confirm(
+								`本当にSpace "${spaceId}" を削除しますか？\n内部のデータもすべて削除されます。`,
+							)
+						)
+							return;
+						delete spacesData[spaceId];
+						if (currentSpaceId === spaceId) {
+							currentSpaceId = Object.keys(spacesData)[0];
+						}
+						renderSpaceRows();
+					};
+
+					row.appendChild(idInput);
+					row.appendChild(textInput);
+					row.appendChild(delBtn);
+					spaceRowsContainer.appendChild(row);
+				}
+			}
+
+			const dataSpaceSelectContainer = document.createElement('div');
+			dataSpaceSelectContainer.style =
+				'display:flex; gap:10px; align-items:center; margin-bottom:15px; background:#f9f9f9; padding:10px; border-radius:6px; border:1px solid #e0e0e0;';
+			dataTabContent.appendChild(dataSpaceSelectContainer);
+
+			const spaceSelectLbl = document.createElement('label');
+			spaceSelectLbl.innerText = '編集するSpace:';
+			spaceSelectLbl.style = 'font-size:13px; font-weight:bold;';
+			dataSpaceSelectContainer.appendChild(spaceSelectLbl);
+
+			const spaceSelect = document.createElement('select');
+			spaceSelect.style =
+				'padding:6px; border-radius:4px; border:1px solid #ccc; font-size:13px; min-width:150px; flex:1;';
+			dataSpaceSelectContainer.appendChild(spaceSelect);
+
+			function updateSpaceSelectOptions() {
+				spaceSelect.innerHTML = '';
+				Object.keys(spacesData).forEach((spaceId) => {
+					const opt = document.createElement('option');
+					opt.value = spaceId;
+					opt.innerText = `${spaceId} (${spacesData[spaceId].text || '表示名なし'})`;
+					if (spaceId === currentSpaceId) opt.selected = true;
+					spaceSelect.appendChild(opt);
+				});
+			}
+
+			spaceSelect.onchange = () => {
+				currentSpaceId = spaceSelect.value;
+				renderDataRows();
+			};
+
+			// データリスト一覧表示エリア
+			const listContainer = document.createElement('div');
+			listContainer.style =
+				'flex:1; overflow-y:auto; margin-bottom:15px; padding-right:5px;';
+			dataTabContent.appendChild(listContainer);
+
+			const header = document.createElement('div');
+			header.style =
+				'display:flex; gap:5px; margin-bottom:8px; font-size:12px; font-weight:bold; color:#555; position:sticky; top:0; background:white; padding-bottom:4px; border-bottom:1px solid #eee;';
+			header.innerHTML =
+				'<span style="flex:1;">DataID</span><span style="flex:1;">表示名</span><span style="flex:1;">タイプ</span><span style="flex:1.5;">初期値 / 値</span><span style="flex:0.5;">min</span><span style="flex:0.5;">max</span><span style="width:40px;"></span>';
+			listContainer.appendChild(header);
+
+			const rowsContainer = document.createElement('div');
+			listContainer.appendChild(rowsContainer);
+
+			function renderDataRows() {
+				rowsContainer.innerHTML = '';
+				const spaceData = spacesData[currentSpaceId];
+				if (!spaceData) return;
+
+				// 【共通化】上側のmin/maxヘッダー表示制御関数
+				const updateHeaderUI = () => {
+					const hasNumberType = spaceData.datas.some(
+						(d) => d.type === 'number',
+					);
+					header.innerHTML = hasNumberType
+						? '<span style="flex:1;">DataID</span><span style="flex:1;">表示名</span><span style="flex:1;">タイプ</span><span style="flex:1.5;">初期値 / 値</span><span style="flex:0.5;">min</span><span style="flex:0.5;">max</span><span style="width:40px;"></span>'
+						: '<span style="flex:1;">DataID</span><span style="flex:1;">表示名</span><span style="flex:1;">タイプ</span><span style="flex:2.5;">初期値 / 値</span><span style="width:40px;"></span>';
+				};
+				updateHeaderUI(); // 初期描画時に実行
+
+				spaceData.datas.forEach((dataItem, index) => {
+					const row = document.createElement('div');
+					row.style =
+						'display:flex; gap:5px; margin-bottom:8px; align-items:center;';
+
+					const inputDataId = document.createElement('input');
+					inputDataId.type = 'text';
+					inputDataId.value = dataItem.id;
+					inputDataId.placeholder = 'DataID';
+					inputDataId.style =
+						'flex:1; width:0; padding:6px; border:1px solid #ccc; border-radius:4px; font-size:13px; box-sizing:border-box;';
+					inputDataId.oninput = () => {
+						dataItem.id = inputDataId.value.trim();
+					};
+
+					const inputText = document.createElement('input');
+					inputText.type = 'text';
+					inputText.value = dataItem.text;
+					inputText.placeholder = '表示名';
+					inputText.style =
+						'flex:1; width:0; padding:6px; border:1px solid #ccc; border-radius:4px; font-size:13px; box-sizing:border-box;';
+					inputText.oninput = () => {
+						dataItem.text = inputText.value.trim();
+					};
+
+					const selectType = document.createElement('select');
+					selectType.style =
+						'flex:1; width:0; padding:6px; border:1px solid #ccc; border-radius:4px; font-size:13px; box-sizing:border-box;';
+					const types = [
+						{ val: 'text', label: '文字列 (text)' },
+						{ val: 'number', label: '数値 (number)' },
+						{ val: 'boolean', label: '真偽値 (boolean)' },
+						{ val: 'list', label: 'リスト (list)' },
+					];
+					types.forEach((t) => {
+						const opt = document.createElement('option');
+						opt.value = t.val;
+						opt.innerText = t.label;
+						if (t.val === dataItem.type) opt.selected = true;
+						selectType.appendChild(opt);
+					});
+
+					const valueContainer = document.createElement('div');
+					valueContainer.style =
+						'flex:1.5; width:0; display:flex; align-items:center;';
+
+					function updateValueInputUI(currentType, currentVal) {
+						valueContainer.innerHTML = '';
+						if (currentType === 'boolean') {
+							const input = document.createElement('input');
+							input.type = 'checkbox';
+							input.checked =
+								currentVal === true || currentVal === 'true';
+							input.style =
+								'margin:0 auto; width:16px; height:16px;';
+							input.onchange = () => {
+								dataItem.value = input.checked;
+							};
+							valueContainer.appendChild(input);
+						} else if (currentType === 'list') {
+							const textarea = document.createElement('textarea');
+							textarea.style =
+								'width:100%; height:40px; padding:4px; border:1px solid #ccc; border-radius:4px; font-size:12px; box-sizing:border-box; resize:vertical; font-family:sans-serif;';
+							textarea.placeholder = '改行区切りで入力';
+							if (Array.isArray(currentVal)) {
+								textarea.value = currentVal.join('\n');
+							} else {
+								textarea.value =
+									currentVal !== undefined ? currentVal : '';
+							}
+							textarea.oninput = () => {
+								dataItem.value = textarea.value.split('\n');
+							};
+							valueContainer.appendChild(textarea);
+						} else {
+							const input = document.createElement('input');
+							input.type =
+								currentType === 'number' ? 'number' : 'text';
+							input.value =
+								currentVal !== undefined
+									? Array.isArray(currentVal)
+										? currentVal.join(',')
+										: currentVal
+									: '';
+							input.placeholder = '値';
+							input.style =
+								'width:100%; padding:6px; border:1px solid #ccc; border-radius:4px; font-size:13px; box-sizing:border-box;';
+							input.oninput = () => {
+								dataItem.value =
+									currentType === 'number'
+										? input.value === ''
+											? 0
+											: Number(input.value)
+										: input.value;
+							};
+							valueContainer.appendChild(input);
+						}
+					}
+
+					// minとmax用の入力欄を追加
+					const minInput = document.createElement('input');
+					minInput.type = 'number';
+					minInput.placeholder = 'min';
+					minInput.value =
+						dataItem.min !== undefined ? dataItem.min : '';
+					minInput.style =
+						'flex:0.5; width:0; padding:6px; border:1px solid #ccc; border-radius:4px; font-size:13px; box-sizing:border-box;';
+					minInput.oninput = () => {
+						dataItem.min =
+							minInput.value === '' ? '' : Number(minInput.value);
+					};
+
+					const maxInput = document.createElement('input');
+					maxInput.type = 'number';
+					maxInput.placeholder = 'max';
+					maxInput.value =
+						dataItem.max !== undefined ? dataItem.max : '';
+					maxInput.style =
+						'flex:0.5; width:0; padding:6px; border:1px solid #ccc; border-radius:4px; font-size:13px; box-sizing:border-box;';
+					maxInput.oninput = () => {
+						dataItem.max =
+							maxInput.value === '' ? '' : Number(maxInput.value);
+					};
+
+					// number以外のデータ形式の場合min/maxを表示しない制御
+					function updateMinMaxUI(currentType) {
+						const isNumber = currentType === 'number';
+						minInput.style.display = isNumber ? '' : 'none';
+						maxInput.style.display = isNumber ? '' : 'none';
+						if (!isNumber) {
+							minInput.value = '';
+							maxInput.value = '';
+							dataItem.min = '';
+							dataItem.max = '';
+						}
+					}
+
+					selectType.onchange = () => {
+						dataItem.type = selectType.value;
+						if (dataItem.type === 'boolean') dataItem.value = false;
+						else if (dataItem.type === 'number') dataItem.value = 0;
+						else if (dataItem.type === 'list') dataItem.value = [];
+						else dataItem.value = '';
+						updateValueInputUI(dataItem.type, dataItem.value);
+						updateMinMaxUI(dataItem.type);
+						updateHeaderUI(); // タイプ変更のトリガーに合わせてヘッダーも動的に更新
+					};
+
+					updateValueInputUI(dataItem.type, dataItem.value);
+					updateMinMaxUI(dataItem.type);
+
+					const delBtn = document.createElement('button');
+					delBtn.innerText = '✕';
+					delBtn.style =
+						'width:40px; padding:6px; background:#ff4d4d; color:white; border:none; border-radius:4px; cursor:pointer; font-size:12px; flex-shrink:0;';
+					delBtn.onclick = () => {
+						spaceData.datas.splice(index, 1);
+						renderDataRows();
+					};
+
+					row.appendChild(inputDataId);
+					row.appendChild(inputText);
+					row.appendChild(selectType);
+					row.appendChild(valueContainer);
+					row.appendChild(minInput);
+					row.appendChild(maxInput);
+					row.appendChild(delBtn);
+					rowsContainer.appendChild(row);
+				});
+			}
+
+			// 項目(Data)追加ボタン
+			const addBtn = document.createElement('button');
+			addBtn.innerText = '+ 項目を追加';
+			addBtn.style =
+				'align-self:flex-start; padding:6px 12px; background:#5cb85c; color:white; border:none; border-radius:4px; cursor:pointer; font-size:13px; margin-bottom:15px;';
+			addBtn.onclick = () => {
+				if (!spacesData[currentSpaceId]) return;
+				spacesData[currentSpaceId].datas.push({
+					id: '',
+					text: '',
+					type: 'text',
+					value: '',
+					min: '',
+					max: '',
+				});
+				renderDataRows();
+			};
+			dataTabContent.appendChild(addBtn);
+
+			// 初期起動時のデフォルト表示タブをSpace設定に指定
+			setTab('space');
+
+			// --- モーダル最下部の共通ボタンコンテナ ---
+			const btnContainer = document.createElement('div');
+			btnContainer.style =
+				'display:flex; justify-content:flex-end; gap:10px; border-top:1px solid #eee; padding-top:10px;';
+
+			const cancelBtn = document.createElement('button');
+			cancelBtn.innerText = 'キャンセル';
+			cancelBtn.style =
+				'padding:6px 12px; border:1px solid #ccc; border-radius:4px; background:#fff; cursor:pointer; font-size:13px;';
+			cancelBtn.onclick = () => {
+				backdrop.remove();
+				resolve(null);
+			};
+
+			const saveBtn = document.createElement('button');
+			saveBtn.innerText = '確定';
+			saveBtn.style =
+				'padding:6px 12px; background:#ff8a54; color:white; border:none; border-radius:4px; cursor:pointer; font-size:13px;';
+			saveBtn.onclick = () => {
+				const result = {};
+				for (const spaceId in spacesData) {
+					const spaceData = spacesData[spaceId];
+					const sId = spaceId.trim();
+					if (!sId) continue;
+
+					result[sId] = {};
+					if (spaceData.text) {
+						result[sId]['_space_text'] = spaceData.text;
+					}
+
+					for (const dataItem of spaceData.datas) {
+						const dId = dataItem.id.trim();
+						if (dId) {
+							let finalVal = dataItem.value;
+							if (dataItem.type === 'number') {
+								finalVal =
+									finalVal === '' ? 0 : Number(finalVal);
+							} else if (dataItem.type === 'boolean') {
+								finalVal =
+									finalVal === true || finalVal === 'true';
+							} else if (dataItem.type === 'list') {
+								if (!Array.isArray(finalVal)) {
+									finalVal =
+										typeof finalVal === 'string'
+											? finalVal.split('\n')
+											: [];
+								}
+							}
+							result[sId][dId] = {
+								text: dataItem.text,
+								type: dataItem.type,
+								value: finalVal,
+							};
+
+							// type: number の場合のみ min, max プロパティを付与する
+							if (dataItem.type === 'number') {
+								if (
+									dataItem.min !== '' &&
+									dataItem.min !== undefined
+								) {
+									result[sId][dId].min = Number(dataItem.min);
+								}
+								if (
+									dataItem.max !== '' &&
+									dataItem.max !== undefined
+								) {
+									result[sId][dId].max = Number(dataItem.max);
+								}
+							}
+						}
+					}
+				}
+				backdrop.remove();
+				resolve(result);
+			};
+
+			btnContainer.appendChild(cancelBtn);
+			btnContainer.appendChild(saveBtn);
+			modal.appendChild(btnContainer);
+			backdrop.appendChild(modal);
+			document.body.appendChild(backdrop);
+		});
 	}
 
 	// NyankoExtensionCreater
