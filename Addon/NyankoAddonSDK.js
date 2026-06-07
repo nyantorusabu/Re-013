@@ -7,7 +7,7 @@
 	'use strict';
 
 	// 変数定義
-	const SDK_VER = '1.0.2';
+	const SDK_VER = '1.0.3';
 
 	// ライブラリ読み込みとかその辺の関数
 	async function Extension_Setup() {
@@ -518,7 +518,7 @@
 											id: dataID,
 											text: item.text || '',
 											type: item.type || 'text',
-											value: item.value,
+											default: item.value,
 											min:
 												item.min !== undefined
 													? item.min
@@ -540,7 +540,7 @@
 											id: dataID,
 											text: '',
 											type: guessedType,
-											value: item,
+											default: item,
 											min: '',
 											max: '',
 										});
