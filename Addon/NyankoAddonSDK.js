@@ -7,7 +7,7 @@
 	'use strict';
 
 	// 変数定義
-	const SDK_VER = '1.0.0';
+	const SDK_VER = '1.0.1';
 
 	// ライブラリ読み込みとかその辺の関数
 	async function Extension_Setup() {
@@ -98,26 +98,13 @@
 			if (!Object.keys(RLVarList).includes(ID)) return '';
 			return RLVarList[ID];
 		}
-		GetOption(args) {
-			const target = NDT.Spr.Editing;
-			if (!target || !target.mfest || !target.mfest.option) return '';
-			const spaceID = args.SpaceID;
-			const dataID = args.DataID;
-			if (!target.mfest.option[spaceID]) return '';
-
-			const dataObj = target.mfest.option[spaceID][dataID];
-			if (dataObj === undefined) return '';
-
-			// 新しい構造 { text, type, value } の場合は .value を返す
-			if (
-				dataObj !== null &&
-				typeof dataObj === 'object' &&
-				'value' in dataObj
-			) {
-				return dataObj.value;
-			}
-			// 旧データ互換用フォールバック
-			return dataObj;
+		GetOption(args, util) {
+			if (!window.NYADDON) return;
+			const target = util.target;
+			const MFest = target.mfest;
+			return String(
+				NYADDON.GetOption(mfest.id, args.SpaceID, args.DataID),
+			);
 		}
 		async CreateAddon() {
 			const res = await _PromptManifest('外部アドオンを新規作成', {
