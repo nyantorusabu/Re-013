@@ -7,7 +7,7 @@
 	'use strict';
 
 	// 変数定義
-	const SDK_VER = '1.0.1';
+	const SDK_VER = '1.0.2';
 
 	// ライブラリ読み込みとかその辺の関数
 	async function Extension_Setup() {
@@ -101,7 +101,7 @@
 		GetOption(args, util) {
 			if (!window.NYADDON) return;
 			const target = util.target;
-			const MFest = target.mfest;
+			const mfest = target.mfest;
 			return String(
 				NYADDON.GetOption(mfest.id, args.SpaceID, args.DataID),
 			);
