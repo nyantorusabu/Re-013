@@ -1715,6 +1715,7 @@
 		_SaveOptionsToLocalStorage();
 	}
 	function _GetOption(id, space, key) {
+		const Booltrue = ['true', '1', 'yes', 'on'];
 		const ADNOPT = _getDataEntry(id, space, key);
 		if (!ADNOPT) {
 			log('e', `オプション"${id}.${space}.${key}"は存在しません`);
@@ -1738,7 +1739,7 @@
 			return Number(v);
 		}
 		if (ADNOPT.type == 'boolean') {
-			return Boolean(v);
+			return String(Booltrue.includes(v.toLowerCase()));
 		}
 		return v;
 	}
