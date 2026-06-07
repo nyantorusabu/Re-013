@@ -7,7 +7,7 @@
 	'use strict';
 
 	// 変数定義
-	const SDK_VER = '1.0.3';
+	const SDK_VER = '1.0.4';
 
 	// ライブラリ読み込みとかその辺の関数
 	async function Extension_Setup() {
@@ -512,13 +512,16 @@
 									if (
 										item &&
 										typeof item === 'object' &&
-										'value' in item
+										('default' in item || 'value' in item)
 									) {
 										spacesData[spaceID].datas.push({
 											id: dataID,
 											text: item.text || '',
 											type: item.type || 'text',
-											default: item.value,
+											default:
+												item.default !== undefined
+													? item.default
+													: item.value,
 											min:
 												item.min !== undefined
 													? item.min
@@ -561,7 +564,7 @@
 							id: 'Volume',
 							text: '音量',
 							type: 'number',
-							value: 100,
+							default: 100,
 							min: 0,
 							max: 100,
 						},
@@ -897,7 +900,7 @@
 							input.style =
 								'margin:0 auto; width:16px; height:16px;';
 							input.onchange = () => {
-								dataItem.value = input.checked;
+								dataItem.default = input.checked;
 							};
 							valueContainer.appendChild(input);
 						} else if (currentType === 'list') {
@@ -912,7 +915,7 @@
 									currentVal !== undefined ? currentVal : '';
 							}
 							textarea.oninput = () => {
-								dataItem.value = textarea.value.split('\n');
+								dataItem.default = textarea.value.split('\n');
 							};
 							valueContainer.appendChild(textarea);
 						} else {
@@ -929,7 +932,7 @@
 							input.style =
 								'width:100%; padding:6px; border:1px solid #ccc; border-radius:4px; font-size:13px; box-sizing:border-box;';
 							input.oninput = () => {
-								dataItem.value =
+								dataItem.default =
 									currentType === 'number'
 										? input.value === ''
 											? 0
@@ -980,16 +983,19 @@
 
 					selectType.onchange = () => {
 						dataItem.type = selectType.value;
-						if (dataItem.type === 'boolean') dataItem.value = false;
-						else if (dataItem.type === 'number') dataItem.value = 0;
-						else if (dataItem.type === 'list') dataItem.value = [];
-						else dataItem.value = '';
-						updateValueInputUI(dataItem.type, dataItem.value);
+						if (dataItem.type === 'boolean')
+							dataItem.default = false;
+						else if (dataItem.type === 'number')
+							dataItem.default = 0;
+						else if (dataItem.type === 'list')
+							dataItem.default = [];
+						else dataItem.default = '';
+						updateValueInputUI(dataItem.type, dataItem.default);
 						updateMinMaxUI(dataItem.type);
 						updateHeaderUI(); // タイプ変更のトリガーに合わせてヘッダーも動的に更新
 					};
 
-					updateValueInputUI(dataItem.type, dataItem.value);
+					updateValueInputUI(dataItem.type, dataItem.default);
 					updateMinMaxUI(dataItem.type);
 
 					const delBtn = document.createElement('button');
@@ -1023,7 +1029,7 @@
 					id: '',
 					text: '',
 					type: 'text',
-					value: '',
+					default: '',
 					min: '',
 					max: '',
 				});
@@ -1067,7 +1073,7 @@
 					for (const dataItem of spaceData.datas) {
 						const dId = dataItem.id.trim();
 						if (dId) {
-							let finalVal = dataItem.value;
+							let finalVal = dataItem.default;
 							if (dataItem.type === 'number') {
 								finalVal =
 									finalVal === '' ? 0 : Number(finalVal);
@@ -1085,7 +1091,7 @@
 							result[sId][dId] = {
 								text: dataItem.text,
 								type: dataItem.type,
-								value: finalVal,
+								default: finalVal,
 							};
 
 							// type: number の場合のみ min, max プロパティを付与する
