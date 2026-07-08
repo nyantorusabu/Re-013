@@ -155,15 +155,16 @@
 			URL.revokeObjectURL(a.href);
 		}
 		V1ToV2() {
-			_V1ToV2(NDT.Spr.Editing.id);
-			window.alert(`AddonV1>V2の移行が完了しました`);
+			if (_V1ToV2(NDT.Spr.Editing.id)) {
+				window.alert(`AddonV1>V2の移行が完了しました`);
+			}
 		}
 		async LoadAddonV1() {
 			const URL = await NDT.Upload('.sprite3');
 			const data = new Uint8Array(await (await fetch(URL)).arrayBuffer());
 			const SPZip = fflate.unzipSync(data);
 			const SP = JSON.parse(fflate.strFromU8(SPZip['sprite.json']));
-			_V1ToV2((await NDT.Spr.Add(URL)).id);
+			if (!_V1ToV2((await NDT.Spr.Add(URL)).id)) return;
 		}
 		async GenerateMFest() {
 			const target = NDT.Spr.Editing;
@@ -252,7 +253,7 @@
 			window.alert(
 				`スプライト"${target.getName()}"はAddonV1ではありません`,
 			);
-			return;
+			return false;
 		}
 		const mfest = JSON.parse(CMT[1].text.replace('@manifest', ''));
 		delete mfest.restart;
@@ -315,6 +316,7 @@
 			}
 		}
 		NDT.VM.emitWorkspaceUpdate();
+		return true;
 	}
 	async function _LoadAddon(URL) {
 		const res = await fetch(URL);
