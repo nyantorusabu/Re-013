@@ -7,7 +7,7 @@
 	'use strict';
 
 	// 変数定義
-	const SDK_VER = '1.0.4';
+	const SDK_VER = '1.0.5';
 
 	// ライブラリ読み込みとかその辺の関数
 	async function Extension_Setup() {
@@ -474,7 +474,7 @@
 
 			const modal = document.createElement('div');
 			modal.style =
-				'background:white;padding:20px;border-radius:8px;width:800px;height:80%;max-height:85%;display:flex;flex-direction:column;box-shadow:0 4px 12px rgba(0,0,0,0.15);color:#333;';
+				'background:white;padding:20px;border-radius:8px;width:960px;height:80%;max-height:85%;display:flex;flex-direction:column;box-shadow:0 4px 12px rgba(0,0,0,0.15);color:#333;';
 
 			const title = document.createElement('h3');
 			title.innerText = titleText;
@@ -486,6 +486,8 @@
 
 			// データ管理用の内部状態オブジェクト
 			const spacesData = {};
+			// Spaceの並び順を管理する配列（ドラッグ&ドロップでの並べ替えに使用）
+			const spaceOrder = [];
 
 			// 初期データのマッピング
 			if (initialData && typeof initialData === 'object') {
@@ -502,6 +504,7 @@
 								text: spaceObj.text || spaceID,
 								datas: [],
 							};
+							spaceOrder.push(spaceID);
 							for (const dataID in spaceObj) {
 								if (dataID === 'text') continue;
 								if (
@@ -532,6 +535,10 @@
 												item.max !== undefined
 													? item.max
 													: '',
+											amount:
+												item.amount !== undefined
+													? item.amount
+													: '',
 										});
 									} else {
 										const guessedType = Array.isArray(item)
@@ -548,6 +555,7 @@
 											default: item,
 											min: '',
 											max: '',
+											amount: '',
 										});
 									}
 								}
@@ -558,7 +566,7 @@
 			}
 
 			// データが完全に空の場合のデフォルト初期値
-			if (Object.keys(spacesData).length === 0) {
+			if (spaceOrder.length === 0) {
 				spacesData['Setting'] = {
 					text: '設定',
 					datas: [
@@ -569,13 +577,15 @@
 							default: 100,
 							min: 0,
 							max: 100,
+							amount: 1,
 						},
 					],
 				};
+				spaceOrder.push('Setting');
 			}
 
 			// 現在選択されているSpaceIDの管理
-			let currentSpaceId = Object.keys(spacesData)[0];
+			let currentSpaceId = spaceOrder[0];
 
 			// --- タブ切り替え用のUI定義 ---
 			const tabContainer = document.createElement('div');
@@ -677,6 +687,7 @@
 					text: text || id,
 					datas: [],
 				};
+				spaceOrder.push(id);
 				newSpaceIdInput.value = '';
 				newSpaceTextInput.value = '';
 				renderSpaceRows();
@@ -697,18 +708,59 @@
 			spaceHeader.style =
 				'display:flex; gap:5px; margin-bottom:8px; font-size:12px; font-weight:bold; color:#555; border-bottom:1px solid #eee; padding-bottom:4px; position:sticky; top:0; background:white;';
 			spaceHeader.innerHTML =
-				'<span style="flex:1;">SpaceID</span><span style="flex:1;">表示名</span><span style="width:60px;">操作</span>';
+				'<span style="width:20px;"></span><span style="flex:1;">SpaceID</span><span style="flex:1;">表示名</span><span style="width:60px;">操作</span>';
 			spaceListContainer.appendChild(spaceHeader);
 
 			const spaceRowsContainer = document.createElement('div');
 			spaceListContainer.appendChild(spaceRowsContainer);
 
+			// ドラッグ&ドロップによる並べ替え中のインデックスを保持
+			let draggingSpaceIndex = null;
+
 			function renderSpaceRows() {
 				spaceRowsContainer.innerHTML = '';
-				for (const spaceId in spacesData) {
+				spaceOrder.forEach((spaceId, spaceIndex) => {
 					const row = document.createElement('div');
 					row.style =
 						'display:flex; gap:5px; margin-bottom:8px; align-items:center;';
+					row.draggable = true;
+
+					row.ondragstart = (e) => {
+						draggingSpaceIndex = spaceIndex;
+						row.style.opacity = '0.4';
+						e.dataTransfer.effectAllowed = 'move';
+					};
+					row.ondragend = () => {
+						draggingSpaceIndex = null;
+						row.style.opacity = '';
+					};
+					row.ondragover = (e) => {
+						e.preventDefault();
+						e.dataTransfer.dropEffect = 'move';
+					};
+					row.ondrop = (e) => {
+						e.preventDefault();
+						if (
+							draggingSpaceIndex === null ||
+							draggingSpaceIndex === spaceIndex
+						)
+							return;
+						const [moved] = spaceOrder.splice(
+							draggingSpaceIndex,
+							1,
+						);
+						spaceOrder.splice(spaceIndex, 0, moved);
+						draggingSpaceIndex = null;
+						renderSpaceRows();
+					};
+
+					// ドラッグ用ハンドル（左端）
+					const dragHandle = document.createElement('div');
+					dragHandle.innerText = '⠿';
+					dragHandle.title = 'ドラッグして並び替え';
+					dragHandle.style =
+						'width:20px; flex-shrink:0; text-align:center; cursor:grab; color:#888; font-size:14px; user-select:none;';
+					row.appendChild(dragHandle);
 
 					// SpaceID入力欄
 					const idInput = document.createElement('input');
@@ -733,6 +785,10 @@
 						if (newId !== oldId) {
 							spacesData[newId] = spacesData[oldId];
 							delete spacesData[oldId];
+							const orderIdx = spaceOrder.indexOf(oldId);
+							if (orderIdx !== -1) {
+								spaceOrder[orderIdx] = newId;
+							}
 							if (currentSpaceId === oldId) {
 								currentSpaceId = newId;
 							}
@@ -757,7 +813,7 @@
 					delBtn.style =
 						'width:60px; padding:6px; background:#ff4d4d; color:white; border:none; border-radius:4px; cursor:pointer; font-size:12px;';
 					delBtn.onclick = () => {
-						if (Object.keys(spacesData).length <= 1) {
+						if (spaceOrder.length <= 1) {
 							window.alert(
 								'これ以上Spaceを削除できません。最小1つのSpaceが必要です。',
 							);
@@ -770,8 +826,10 @@
 						)
 							return;
 						delete spacesData[spaceId];
+						const orderIdx = spaceOrder.indexOf(spaceId);
+						if (orderIdx !== -1) spaceOrder.splice(orderIdx, 1);
 						if (currentSpaceId === spaceId) {
-							currentSpaceId = Object.keys(spacesData)[0];
+							currentSpaceId = spaceOrder[0];
 						}
 						renderSpaceRows();
 					};
@@ -780,7 +838,7 @@
 					row.appendChild(textInput);
 					row.appendChild(delBtn);
 					spaceRowsContainer.appendChild(row);
-				}
+				});
 			}
 
 			const dataSpaceSelectContainer = document.createElement('div');
@@ -800,7 +858,7 @@
 
 			function updateSpaceSelectOptions() {
 				spaceSelect.innerHTML = '';
-				Object.keys(spacesData).forEach((spaceId) => {
+				spaceOrder.forEach((spaceId) => {
 					const opt = document.createElement('option');
 					opt.value = spaceId;
 					opt.innerText = `${spaceId} (${spacesData[spaceId].text || '表示名なし'})`;
@@ -824,32 +882,68 @@
 			header.style =
 				'display:flex; gap:5px; margin-bottom:8px; font-size:12px; font-weight:bold; color:#555; position:sticky; top:0; background:white; padding-bottom:4px; border-bottom:1px solid #eee;';
 			header.innerHTML =
-				'<span style="flex:1;">DataID</span><span style="flex:1;">表示名</span><span style="flex:1;">タイプ</span><span style="flex:1.5;">初期値 / 値</span><span style="flex:0.5;">min</span><span style="flex:0.5;">max</span><span style="width:40px;"></span>';
+				'<span style="width:20px;"></span><span style="flex:1;">DataID</span><span style="flex:1;">表示名</span><span style="flex:1;">タイプ</span><span style="flex:1.5;">初期値 / 値</span><span style="flex:0.5;">min</span><span style="flex:0.5;">max</span><span style="flex:0.6;">amount</span><span style="width:40px;"></span>';
 			listContainer.appendChild(header);
 
 			const rowsContainer = document.createElement('div');
 			listContainer.appendChild(rowsContainer);
+
+			// ドラッグ&ドロップによる並べ替え中のインデックスを保持
+			let draggingDataIndex = null;
 
 			function renderDataRows() {
 				rowsContainer.innerHTML = '';
 				const spaceData = spacesData[currentSpaceId];
 				if (!spaceData) return;
 
-				// 【共通化】上側のmin/maxヘッダー表示制御関数
-				const updateHeaderUI = () => {
-					const hasNumberType = spaceData.datas.some(
-						(d) => d.type === 'number',
-					);
-					header.innerHTML = hasNumberType
-						? '<span style="flex:1;">DataID</span><span style="flex:1;">表示名</span><span style="flex:1;">タイプ</span><span style="flex:1.5;">初期値 / 値</span><span style="flex:0.5;">min</span><span style="flex:0.5;">max</span><span style="width:40px;"></span>'
-						: '<span style="flex:1;">DataID</span><span style="flex:1;">表示名</span><span style="flex:1;">タイプ</span><span style="flex:2.5;">初期値 / 値</span><span style="width:40px;"></span>';
-				};
-				updateHeaderUI(); // 初期描画時に実行
+				// ヘッダーは行ごとのmin/max表示切り替えに関わらず常に固定レイアウトにする。
+				// (行側もnumber以外の時はmin/maxをvisibility:hiddenにして幅を保持するため、
+				//  ヘッダーと各行の列位置は常に一致する)
+				header.innerHTML =
+					'<span style="width:20px;"></span><span style="flex:1;">DataID</span><span style="flex:1;">表示名</span><span style="flex:1;">タイプ</span><span style="flex:1.5;">初期値 / 値</span><span style="flex:0.5;">min</span><span style="flex:0.5;">max</span><span style="flex:0.6;">amount</span><span style="width:40px;"></span>';
 
 				spaceData.datas.forEach((dataItem, index) => {
 					const row = document.createElement('div');
 					row.style =
 						'display:flex; gap:5px; margin-bottom:8px; align-items:center;';
+					row.draggable = true;
+
+					row.ondragstart = (e) => {
+						draggingDataIndex = index;
+						row.style.opacity = '0.4';
+						e.dataTransfer.effectAllowed = 'move';
+					};
+					row.ondragend = () => {
+						draggingDataIndex = null;
+						row.style.opacity = '';
+					};
+					row.ondragover = (e) => {
+						e.preventDefault();
+						e.dataTransfer.dropEffect = 'move';
+					};
+					row.ondrop = (e) => {
+						e.preventDefault();
+						if (
+							draggingDataIndex === null ||
+							draggingDataIndex === index
+						)
+							return;
+						const [moved] = spaceData.datas.splice(
+							draggingDataIndex,
+							1,
+						);
+						spaceData.datas.splice(index, 0, moved);
+						draggingDataIndex = null;
+						renderDataRows();
+					};
+
+					// ドラッグ用ハンドル（左端）
+					const dragHandle = document.createElement('div');
+					dragHandle.innerText = '⠿';
+					dragHandle.title = 'ドラッグして並び替え';
+					dragHandle.style =
+						'width:20px; flex-shrink:0; text-align:center; cursor:grab; color:#888; font-size:14px; user-select:none;';
+					row.appendChild(dragHandle);
 
 					const inputDataId = document.createElement('input');
 					inputDataId.type = 'text';
@@ -970,16 +1064,36 @@
 							maxInput.value === '' ? '' : Number(maxInput.value);
 					};
 
-					// number以外のデータ形式の場合min/maxを表示しない制御
+					// amount用の入力欄を追加（number専用: 1操作での変動量）
+					const amountInput = document.createElement('input');
+					amountInput.type = 'number';
+					amountInput.placeholder = 'amount';
+					amountInput.value =
+						dataItem.amount !== undefined ? dataItem.amount : '';
+					amountInput.style =
+						'flex:0.6; width:0; padding:6px; border:1px solid #ccc; border-radius:4px; font-size:13px; box-sizing:border-box;';
+					amountInput.oninput = () => {
+						dataItem.amount =
+							amountInput.value === ''
+								? ''
+								: Number(amountInput.value);
+					};
+
+					// number以外のデータ形式の場合min/max/amountを表示しない制御
+					// (display:noneではなくvisibility:hiddenにすることで、
+					//  レイアウト上の幅は保持し、ヘッダーとの列位置ズレを防ぐ)
 					function updateMinMaxUI(currentType) {
 						const isNumber = currentType === 'number';
-						minInput.style.display = isNumber ? '' : 'none';
-						maxInput.style.display = isNumber ? '' : 'none';
+						minInput.style.visibility = isNumber ? '' : 'hidden';
+						maxInput.style.visibility = isNumber ? '' : 'hidden';
+						amountInput.style.visibility = isNumber ? '' : 'hidden';
 						if (!isNumber) {
 							minInput.value = '';
 							maxInput.value = '';
+							amountInput.value = '';
 							dataItem.min = '';
 							dataItem.max = '';
+							dataItem.amount = '';
 						}
 					}
 
@@ -994,7 +1108,6 @@
 						else dataItem.default = '';
 						updateValueInputUI(dataItem.type, dataItem.default);
 						updateMinMaxUI(dataItem.type);
-						updateHeaderUI(); // タイプ変更のトリガーに合わせてヘッダーも動的に更新
 					};
 
 					updateValueInputUI(dataItem.type, dataItem.default);
@@ -1015,6 +1128,7 @@
 					row.appendChild(valueContainer);
 					row.appendChild(minInput);
 					row.appendChild(maxInput);
+					row.appendChild(amountInput);
 					row.appendChild(delBtn);
 					rowsContainer.appendChild(row);
 				});
@@ -1034,6 +1148,7 @@
 					default: '',
 					min: '',
 					max: '',
+					amount: '',
 				});
 				renderDataRows();
 			};
@@ -1062,8 +1177,9 @@
 				'padding:6px 12px; background:#ff8a54; color:white; border:none; border-radius:4px; cursor:pointer; font-size:13px;';
 			saveBtn.onclick = () => {
 				const result = {};
-				for (const spaceId in spacesData) {
+				for (const spaceId of spaceOrder) {
 					const spaceData = spacesData[spaceId];
+					if (!spaceData) continue;
 					const sId = spaceId.trim();
 					if (!sId) continue;
 
@@ -1096,7 +1212,7 @@
 								default: finalVal,
 							};
 
-							// type: number の場合のみ min, max プロパティを付与する
+							// type: number の場合のみ min, max, amount プロパティを付与する
 							if (dataItem.type === 'number') {
 								if (
 									dataItem.min !== '' &&
@@ -1109,6 +1225,14 @@
 									dataItem.max !== undefined
 								) {
 									result[sId][dId].max = Number(dataItem.max);
+								}
+								if (
+									dataItem.amount !== '' &&
+									dataItem.amount !== undefined
+								) {
+									result[sId][dId].amount = Number(
+										dataItem.amount,
+									);
 								}
 							}
 						}
